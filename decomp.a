@@ -8,6 +8,7 @@
 ;
 ; 05/2021
 ;
+; v0.02 - add mini display while unpacking
 ; v0.01 - first commit
 ; 
 !cpu 6502
@@ -19,13 +20,14 @@
 		*= $1000 ; ORG
 
 ; =============================================================================
-; ZERO PAGE / decomp LZ4
-src1        	= $30   	; +$31
-src2        	= $32   	; +$33
-dest        	= $34   	; +$35
-lenL        	= $36
-lenH        	= $37
-token       	= $38
+; ZERO PAGE / decomp LZ4 (use usual free addresses in ZP)
+src1        	= $06   	; +$07
+src2        	= $08   	; +$09
+dest        	= $CE   	; +$CF
+lenL        	= $EB
+lenH        	= $EC
+token       	= $ED
+index		= $D7
 ; =============================================================================
 START
 !zone
@@ -40,6 +42,8 @@ START
             	STA dest            
             	LDA #>DECOMP_ADD
             	STA dest+1
+		LDA #03
+		STA index
 
 .BP
           	jsr .GET_BYTE                  
@@ -93,7 +97,17 @@ START
 .store             	sta (dest),Y
                   	INC dest
                   	BNE .s2
- 		INC dest+1                 	
+ 		INC dest+1
+		; display
+		LDY index 
+		LDA DIS,Y
+	        	STA $400
+		DEC index
+		BPL +
+		LDY #03
+		STY index
++		LDY #00
+		; -------      	
 .s2                 dec lenL
                   	BNE +
                   	dec lenH
@@ -121,6 +135,8 @@ START
 		RTS					
 .s5		INC src2+1			
 		RTS
+; -----------------------------------------------------------------------------
+DIS		!byte $DC,$AD,$AF,$A1
 ; =============================================================================
 COMPDATA
 

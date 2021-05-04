@@ -4,10 +4,11 @@
 ; SHADOW PARTY 2021 VERSION
 ;
 ; CODE: GROUiK / [FRENCH TOUCH]
-; MUSIC: DUBMOOD + ZOOM
+; MUSIC: DUBMOOD + zOOm
 ; GFX: GROUiK
 ;
 ; 05/2021
+; v0.02 - add CPU detection + cycles fix for 65C02
 ; v0.01 - first commit (from BETA 1)
 ; 
 !cpu 6502
@@ -21,6 +22,7 @@ VERTBLANK   	= $C019 ;
 ; ZERO PAGE individual
 IntL        	= $03   	; L value for INT delay
 IntH        	= $04   	; H value for INT delay
+b65C02		= $05
 
 OUT1	  	= $10	; +$11
 OUT2        	= $12   	; +$13
@@ -136,6 +138,16 @@ DECOMP_ADD
 ; =================================================================================================
 MAIN
 !zone  
+		; CPU detection
+		; $80 = DOP/BRA
+            	!byte $80,$03   		; "BRA +3" if 65C02 or "DOP" if 6502
+            	JMP .n6502  		; if "BRA" skip JMP => 65C02 else DOP go to JMP (=> 6502)
+            	; si on arrive ici, 65C02/65816
+            	LDA #01			; 65C02 here
+            	!byte $2C			; skip 2 next bytes      		
+.n6502  		LDA #00
+	      	STA b65C02		; 0 if 6502 / 1 if 65C02 
+
 		; Set Lores1
 		LDY #00
 		LDA #$F2
@@ -223,7 +235,7 @@ SYNC
            	; 20279
 -           	LDY #255
             	JSR WAIT65                  	; 255*65 = 16575
-            	LDY #56      		; 56 (PAL) / 06 (NTSC)
+            	LDY #56      		; 56 (PAL)
             	JSR WAIT65                	; 56*65 = 3640 (PAL)
                                         	; = 20215
 
@@ -245,7 +257,7 @@ SYNC
 ;                                                                           ; = 65
 ; line 0 (display) / cycle 0
 
-            	; on doit attendre 191+70+49=310 lignes pour revenir cycle 0 avant dernière ligne VBL (ou 261 si NTSC)
+            	; on doit attendre 191+70+49=310 lignes pour revenir cycle 0 avant dernière ligne VBL
             	LDY #255
             	JSR WAIT65
             	LDY #55                	; 255+55=310 (PAL)
@@ -492,7 +504,10 @@ MODPAGEG    	LDX #00                                                         	; 
             	; last VBL line
 		NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP
 		NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP
-		NOP : NOP : LDA $AC
+		NOP
+		LDA b65C02	; 3
+		BNE +		; + 3 if 65C02 or + 2 if 6502
++		
 		; first DISPLAY LINE
 		JSR ROUTINE_RUN		
 
@@ -2436,7 +2451,7 @@ TNBROW 		!byte 5, 5, 5, 5, 5, 5, 5, 5, 5, 2, 4, 5, 4, 6, 6, 5, 5, 5, 5, 5, 6, 5,
 
 !convtab "specialtxt.bin" {
 ScrollText
-		!Text "                          ",0x25,"OLDSKOOL FORT ET VERT",0x26," FOR APPLE & RELEASED AT SHADOW PARTY 2021! CODE+GFX:GROUiK*MUSIC:DUBMOOD+ZOOM. GREETZ TO ARKOS*BRUTAL DELUXE*COSINE*DEFENCE FORCE*DESIRE*IMPHOBIA*NINJAFORCE. DO YOU THINK YOU CAN DO BETTER GFX ? I AGREE... SO CONTACT US!"
+		!Text "                          ",0x25,"OLDSKOOL FORT ET VERT",0x26," FOR APPLE & RELEASED AT SHADOW PARTY 2021! CODE+GFX:GROUiK*MUSIC:DUBMOOD+Z00M. GREETZ TO ARKOS*BRUTAL DELUXE*COSINE*DEFENCE FORCE*DESIRE*IMPHOBIA*NINJAFORCE. DO YOU THINK YOU CAN DO BETTER GFX ? I AGREE... SO CONTACT US!"
 		!byte $FF
 }
 ; -------------------------------------------------------------------------------------------------
