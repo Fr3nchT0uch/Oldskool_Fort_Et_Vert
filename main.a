@@ -1,0 +1,2900 @@
+; ACME 0.96.4
+; 
+; OLDSKOOL FORT ET VERT
+; SHADOW PARTY 2021 VERSION
+;
+; CODE: GROUiK / [FRENCH TOUCH]
+; MUSIC: DUBMOOD + ZOOM
+; GFX: GROUiK
+;
+; 05/2021
+; v0.01 - first commit (from BETA 1)
+; 
+!cpu 6502
+!convtab "a2txt.bin" ; 
+!sl "lbl_main.txt"
+
+; =============================================================================
+; SYSTEM/CONSTANT
+VERTBLANK   	= $C019 ;
+; =============================================================================
+; ZERO PAGE individual
+IntL        	= $03   	; L value for INT delay
+IntH        	= $04   	; H value for INT delay
+
+OUT1	  	= $10	; +$11
+OUT2        	= $12   	; +$13
+oldREGD		= $14
+
+; USED by PLAYER PYM + INT
+; -------------------------------------
+iTFrames		= $4A
+saveA       	= $4B
+saveY       	= $4C
+saveX       	= $4D
+Tick        	= $4E   	; +$4F
+
+nREG0		= $50
+vREG0		= $51
+dREG0		= $52	; +$53
+nREG1		= $54
+vREG1		= $55
+dREG1		= $56	; +$57
+nREG2		= $58
+vREG2		= $59
+dREG2		= $5A	; +$5B
+nREG3		= $5C
+vREG3		= $5D
+dREG3		= $5E	; +$5F
+nREG4		= $60
+vREG4		= $61 
+dREG4		= $62	; +$63
+nREG5		= $64
+vREG5		= $65 
+dREG5		= $66	; +$67
+nREG6		= $68
+vREG6		= $69
+dREG6		= $6A	; +$6B
+nREG7		= $6C
+vREG7		= $6D
+dREG7		= $6E	; +$6F
+nREG8		= $70
+vREG8		= $71
+dREG8		= $72	; +$73
+nREG9		= $74
+vREG9		= $75
+dREG9		= $76	; +$77
+nREGA		= $78
+vREGA		= $79 
+dREGA		= $7A	; +$7B
+nREGB		= $7C
+vREGB		= $7D 
+dREGB		= $7E	; +$7F
+nREGC		= $80
+vREGC		= $81 
+dREGC		= $82	; +$83
+nREGD		= $84
+vREGD		= $85
+dREGD		= $86	; +$87
+
+count1Pat   	= $88
+indexPat    	= $89
+
+iREG0       	= $8A
+iREG1       	= $8B
+iREG2       	= $8C
+iREG3       	= $8D
+iREG4       	= $8E
+iREG5       	= $8F
+iREG6       	= $90
+iREG7       	= $91
+iREG8       	= $92
+iREG9       	= $93
+iREGA       	= $94
+iREGB       	= $95
+iREGC       	= $96
+iREGD       	= $97
+
+bMark		= $98
+
+; ZP for effects parts 
+row		= $FF
+L0		= $FE
+L1		= $FD
+L2		= $FC
+L3		= $FB
+L4		= $FA
+L5		= $F9
+
+count 		= $F7
+count2		= $F6
+count3		= $F5
+
+IndexBar1		= $F4
+IndexBar2		= $F3
+temp		= $F2
+IndexBar3		= $F1
+IndexBar4		= $F0
+IndexStar		= $EF
+IndexLinePic	= $EE
+IndexDataPic	= $ED
+IndexLineColor	= $EC
+IndexColor	= $EB
+IndexSlice	= $EA
+countswap		= $E9
+indexswap		= $E8
+indexsineff4	= $E7
+; =================================================================================================
+
+		*= $4000
+DECOMP_ADD
+
+!binary "HIRES.bin"
+
+		*= $6000
+!binary "MUSIC.bin" 
+; =================================================================================================
+MAIN
+!zone  
+		; Set Lores1
+		LDY #00
+		LDA #$F2
+-		STA $800,Y
+		STA $900,Y
+		STA $A00,Y
+		STA $B00,Y
+		INY
+		BNE -
+
+		; init VAR
+		LDA #00
+            	STA Tick
+            	STA Tick+1 
+		STA bMark			
+		STA iTFrames 
+		LDA #<(20280-2) 
+		STA IntL
+		LDA #>(20280-2)
+		STA IntH
+; =================================================================================================
+Init_MB     	; init Mockingboard             
+!zone
+		LDX #00
+		STX OUT2
+		INX
+		STX OUT1
+		LDA #$C4
+		STA OUT2+1
+		STA OUT1+1
+            	; init MB (6522/AY1) / (6522/AY2)
+            	LDA #$FF
+           	STA $C403          		
+            	STA $C483
+            	LDA #$07
+            	STA $C402          
+            	STA $C482
+            	; ---------
+            	; clean REGISTER AY1 / AY2
+            	LDA #$00
+            	STA $C400
+            	STA $C480
+            	LDA #$04
+            	STA $C400
+            	STA $C480
+            	; ---------
+            	LDA #PATTERNSIZE
+            	STA count1Pat
+            	LDA #00
+            	STA indexPat
+            	TAX                 	; = 0 - init with pattern 0
+            	JSR INIT_PATTERN
+; -------------------------------------
+Init_INT    	; init interrupt
+!zone       
+		SEI
+
+            	; IIe/IIc
+            	LDA $C083
+		LDA $C083			; write/read to RAM bank2 (Langage Card)
+		LDA #<INT_ROUT
+            	STA $FFFE       
+            	LDA #>INT_ROUT
+            	STA $FFFF
+	
+            	; init INT - T1/6522/1 
+            	LDA #%01000000      	; T1 Continuous Interrupt (FREE MODE) / PB7 disabled / (T2 One Shot - don't care here)
+            	STA $C40B           	; Auxiliary Control Register
+
+            	LDA #%11000000      	; Enable Timer 1 (only)
+            	STA $C40E           	; Interrupt Enable Register 
+
+; =================================================================================================
+!align 255,00       ; align here to avoid syncloop crossing page 
+            	; PRECISE VBL detection - PAL/NTSC
+SYNC
+-           	LDA VERTBLANK         
+            	BMI -                       	; wait fin display courant                                            
+-           	LDA VERTBLANK         
+            	BPL -                       	; wait fin VBL courant 
+
+            	; Debut DISPLAY     
+            	LDA $EA                     	; 3
+
+           	; 20279
+-           	LDY #255
+            	JSR WAIT65                  	; 255*65 = 16575
+            	LDY #56      		; 56 (PAL) / 06 (NTSC)
+            	JSR WAIT65                	; 56*65 = 3640 (PAL)
+                                        	; = 20215
+
+            	LDY #00
+            	JSR WAIT57                  	; 57
+
+            	LDA VERTBLANK               	; 4 (lecture au 4ème cycle)
+            	BMI -                       	; 3
+                                        	; = 20215+57+4+3 = 20279
+            
+            	; ici synchro précise => DEBUT DISPLAY
+; -----------------------------------------------------------------
+; WARNING: DISPLAY detected (VERTBLANK <0) from cycle #52 of last line (#311) of VBL
+; so BMI not taken (LDA VERTBLANK occurs at cycle #51 of line 311)
+                                                                            ; 2 cycles already passed during DISPLAY (bmi not taken)          
+; line 311 / cycle 54
+;                                       
+            	NOP : NOP : NOP : NOP  : LDA $EA                        ; +11     
+;                                                                           ; = 65
+; line 0 (display) / cycle 0
+
+            	; on doit attendre 191+70+49=310 lignes pour revenir cycle 0 avant dernière ligne VBL (ou 261 si NTSC)
+            	LDY #255
+            	JSR WAIT65
+            	LDY #55                	; 255+55=310 (PAL)
+            	JSR WAIT65
+; =================================================================================================          
+            	; ici synchro précise => cycle 0 / last VBL line
+		; complete line + set int
+		;
+            	LDX IntL                                	              	; 3
+            	LDY IntH                      	                   		; 3           
+            	STX $C404                   	; T1C_1-Lower                       	; 4
+            	STY $C405                   	; T1C_1-High                        	; 4 (counter launched at the last cycle of STY)
+                    	                    ; -> writing T1C_H launch countdown     ; = [14]
+
+		CLI
+
+		JSR ROUTINE_INIT
+
+		; init SCREEN
+		BIT $C050
+		BIT $C057
+		BIT $C052
+		BIT $C055
+; =================================================================================================
+; SCRIPT
+		; f = 0
+		; NOEFFECT
+		; 1 bar
+		; low speed
+Loop1		LDA bMark
+		BEQ Loop1
+		DEC bMark		; reinit
+		
+		; f = 256
+		; DISPLAY PIC (FT)
+		; 1 bar
+		; low speed
+
+		LDA #<EFFECT2
+		STA mod_effect1+1
+		LDA #>EFFECT2
+		STA mod_effect1+2
+
+Loop2		LDA bMark
+		BEQ Loop2
+		DEC bMark		; reinit
+
+		; f = 512
+		; DISPLAY PIC (PRESENT)
+		; 1 bar
+		; low speed
+		
+		LDA #<PRESENT_PIC
+		STA mod_picture+1
+		LDA #>PRESENT_PIC
+		STA mod_picture+2
+		LDA #YPIC+4
+		STA IndexLinePic
+		LDA #YPIC+28
+		STA mod_effect2_1+1
+		LDA #00 
+		STA IndexDataPic
+
+Loop3		LDA bMark
+		BEQ Loop3
+		DEC bMark
+
+		; f = 768
+		; OLDSKOOL appearance
+		; 1 bar
+		; low speed
+
+		LDA #<EFFECT4
+		STA mod_effect1+1
+		LDA #>EFFECT4
+		STA mod_effect1+2
+		LDA #YPIC
+		STA IndexLinePic
+
+Loop4		LDA bMark
+		BEQ Loop4
+		DEC bMark
+
+		; f = 1152
+		; OLDSKOOL appearance (finished)
+		; 2 bars
+		; speed = 2
+		LDA #$99
+		STA add_bar2
+		LDA #$E6
+		STA mod_bar1_2
+		STA mod_bar2_2
+		STA mod_bar3_2
+		STA mod_bar4_2
+
+Loop5		LDA bMark
+		BEQ Loop5
+		DEC bMark
+
+		; f = 1280
+		; 3 bars
+		LDA #$99
+		STA add_bar3
+
+Loop6		LDA bMark
+		BEQ Loop6
+		DEC bMark
+
+		; f = 1408
+		; 4 bars
+		LDA #$99
+		STA add_bar4
+
+Loop7		LDA bMark
+		BEQ Loop7
+		DEC bMark
+
+		; f = 1536
+		; speed high
+		LDA #$E6
+		STA mod_bar1_1
+		STA mod_bar2_1
+		STA mod_bar3_1
+		STA mod_bar4_1
+
+Loop7b		LDA bMark
+		BEQ Loop7b
+		DEC bMark
+
+		; f = 1664
+		; add swap AN3
+		LDA #$EA
+		STA mod_swap
+		LDA #112
+		STA count3
+
+Loop8		LDA bMark
+		BEQ Loop8
+		DEC bMark
+
+		; f = 2048
+		; stop swap AN3
+		; switch bars color
+		; accelerate "AN3" for scroll
+		LDA #$60
+		STA mod_swap
+		LDA #<EFFECT3
+		STA mod_effect2+1
+		LDA #>EFFECT3
+		STA mod_effect2+2
+		LSR mod_scroll+1
+
+Loop9		LDA bMark
+		BEQ Loop9
+		DEC bMark
+
+		; f = 2304
+		; starfield
+		; change bars color
+		; accelerate "AN3" for scroll
+		LDA #<EFFECT1
+		STA mod_effect1+1
+		LDA #>EFFECT1
+		STA mod_effect1+2
+		LDA #$9F
+		STA mod_color+1
+		LSR mod_scroll+1
+
+Loop10		LDA bMark
+		BEQ Loop10
+		DEC bMark	
+
+		; f = 2560
+		; change bars color
+		; accelerate "AN3" for scroll
+		; reactivate swap AN3
+		LDA #$EA
+		STA mod_swap
+		LDA #16
+		STA count3
+		LDA #$5F
+		STA mod_color+1
+		LSR mod_scroll+1
+
+Loop11		LDA bMark
+		BEQ Loop11
+		DEC bMark
+
+		; f = 2816
+		LDX #12
+-		LDA TEXTFT,x
+		STA $9A8+13,X
+		DEX
+		BPL -
+		BIT $C051
+
+Loop12		LDA bMark
+		BEQ Loop12
+		DEC bMark
+
+		; f = framemax
+		SEI
+		LDA #%00000000      	; Disable Timer 1
+            	STA $C40E           	; Stop Interrupt
+		STA $C40B 
+		CLI
+.end		JMP .end
+TEXTFT		!TEXT	"FRENCH  TOUCH"
+; =================================================================================================
+INT_ROUT    
+!zone
+		; 2<->9 cycles (according to opcode when INT occured)
+            	; + 7 cycles (6502 INT Sequence)
+            	; = 9/16 cycles passed since INT occured!
+            	; --------------------------------------------------------------------
+
+            	STA saveA				; on sauve A                                
+		STX saveX			   	; on sauve X                                
+		STY saveY				; on sauve Y            	; 9
+
+            	SEC                                                             	; 2
+            	LDA IntL                                                        	; 3
+            	SBC $C404           ; get T1 lower value (counter never stop)   	; 4 
+                                	; -> read at cycle 18/24
+                                	; reset INT too
+            	; SEC not needed - never (previous result is always >0)                       
+            	SBC #25             ; = [32-7+1] => get final value from 0-7    	; 2
+                                	; value = IntL - T1 lower + 7 - 24
+            
+            	LSR                 ; set carry                                 	; 2
+            	STA .mod+1                                                      	; 4
+            	; V = 0 always here            
+.mod        	BVC +                                                           	; 3
+                                                                            		; = +29
+            	; ----
++           	NOP : NOP : NOP
+            	BCC +                                                   
++           	; ----                              ; min 2 / max 9 => +<9-16> => <+18>
+MODPAGEG    	LDX #00                                                         	; 2  
+
+            	; HERE penultimate VBL line -> cycles passed = [14] + 29 + <18> + 2 	; = 63                                  
+            	NOP                                                             	; +2
+                                                                            		; = 65
+            	; last VBL line
+		NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP
+		NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP
+		NOP : NOP : LDA $AC
+		; first DISPLAY LINE
+		JSR ROUTINE_RUN		
+
+		JSR PLAYER_PYM       	; music! (one tick)                
+    
+.end            	;BIT $C404           	; int again (6522)
+		LDA saveA
+		LDY saveY
+		LDX saveX
+		RTI			; sortie INT 
+; =================================================================================================
+PLAYER_PYM	; alt L/R AY version				
+!zone
+		LDA OUT2			; switch l/r
+		EOR #$80
+		STA OUT2
+		TAX
+		INX
+		STX OUT1
+
+.r0		; REGISTER 0
+		LDY #00
+		LDA #$00
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG0			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		
+		DEC nREG0
+		BNE .r1
+        		LDY iREG0
+        		LDA (dREG0),Y
+		STA nREG0
+		INY
+		LDA (dREG0),Y
+		STA vREG0
+		INY
+        		STY iREG0
+        
+.r1		; REGISTER 1
+		LDY #00
+		LDA #$01				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG1			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+		DEC nREG1
+		BNE .r2
+        		LDY iREG1
+        		LDA (dREG1),Y
+		STA nREG1
+		INY
+		LDA (dREG1),Y
+		STA vREG1
+		INY
+        		STY iREG1
+		
+.r2		; REGISTER 2
+		LDY #00
+		LDA #$02				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG2			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+        		DEC nREG2
+		BNE .r3
+        		LDY iREG2
+        		LDA (dREG2),Y
+		STA nREG2
+		INY
+		LDA (dREG2),Y
+		STA vREG2
+		INY
+        		STY iREG2
+
+.r3		; REGISTER 3
+		LDY #00
+		LDA #$03				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG3			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+        		DEC nREG3
+		BNE .r4
+        		LDY iREG3
+        		LDA (dREG3),Y
+		STA nREG3
+		INY
+		LDA (dREG3),Y
+		STA vREG3
+		INY
+        		STY iREG3
+
+.r4		; REGISTER 4
+		LDY #00
+		LDA #04				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG4			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+        		DEC nREG4
+		BNE .r5
+        		LDY iREG4
+        		LDA (dREG4),Y
+		STA nREG4
+		INY
+		LDA (dREG4),Y
+		STA vREG4
+		INY
+        		STY iREG4
+
+.r5		; REGISTER 5
+		LDY #00
+		LDA #$05				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG5			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+        		DEC nREG5
+		BNE .r6
+        		LDY iREG5
+        		LDA (dREG5),Y
+		STA nREG5
+		INY
+		LDA (dREG5),Y
+		STA vREG5
+		INY
+        		STY iREG5
+
+.r6		; REGISTER 6
+		LDY #00
+		LDA #$06				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG5			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+        		DEC nREG6
+		BNE .r7
+        		LDY iREG6
+        		LDA (dREG6),Y
+		STA nREG6
+		INY
+		LDA (dREG6),Y
+		STA vREG6
+		INY
+        		STY iREG6
+
+.r7		; REGISTER 7
+		LDY #00
+		LDA #$07				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG7			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+        		DEC nREG7
+		BNE .r8
+        		LDY iREG7
+        		LDA (dREG7),Y
+		STA nREG7
+		INY
+		LDA (dREG7),Y
+		STA vREG7
+		INY
+        		STY iREG7
+
+.r8		; REGISTER 8
+		LDY #00
+		LDA #$08
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG8			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+        		DEC nREG8
+		BNE .r9
+        		LDY iREG8
+        		LDA (dREG8),Y
+		STA nREG8
+		INY
+		LDA (dREG8),Y
+		STA vREG8
+		INY
+        		STY iREG8
+
+.r9		; REGISTER 9
+		LDY #00
+		LDA #$09				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREG9			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+			
+        		DEC nREG9
+		BNE .ra
+        		LDY iREG9
+        		LDA (dREG9),Y
+		STA nREG9
+		INY
+		LDA (dREG9),Y
+		STA vREG9
+		INY
+        		STY iREG9
+
+.ra		; REGISTER 10
+		LDY #00
+		LDA #$0A
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREGA			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+        		DEC nREGA
+		BNE .rb
+        		LDY iREGA
+        		LDA (dREGA),Y
+		STA nREGA
+		INY
+		LDA (dREGA),Y
+		STA vREGA
+		INY
+        		STY iREGA
+
+.rb		; REGISTER 11
+		LDY #00
+		LDA #$0B				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		LDA vREGB			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+        		DEC nREGB
+		BNE .rd
+        		LDY iREGB
+        		LDA (dREGB),Y
+		STA nREGB
+		INY
+		LDA (dREGB),Y
+		STA vREGB
+		INY
+        		STY iREGB
+
+.rd		; REGISTER 13	; skip if = $FF (warning 2 AY!)
+		LDA vREGD
+		TAY
+		BPL +			; if not $FF play it 
+		LDA oldREGD		; if $FF check previous value
+		BMI .rdb			; if $FF too, skip
+		LDY #$FF			; else $FF is new oldREGD
+
++		STY oldREGD		; save oldREGD
+		TAX			; save vREGD		
+		LDY #00
+		LDA #$0D				
+		STA (OUT1),Y		; reg#				
+		LDA #$07			; Set fct "Set PSG Reg #"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+
+		TXA			; reg value
+		STA (OUT1),Y		; ORA1 (data)
+		LDA #$06			; Set fct "Write DATA"
+		STA (OUT2),Y		; ORB1 (fct)
+		LDA #$04			; Set fct "Inactive"
+		STA (OUT2),Y		; ORB1 (fct)
+		
+.rdb		DEC nREGD
+		BNE .checkpattern
+        		LDY iREGD
+        		LDA (dREGD),Y
+		STA nREGD
+		INY
+		LDA (dREGD),Y
+		STA vREGD
+		INY
+        		STY iREGD
+		
+.checkpattern
+        		DEC count1Pat		       	; end of ONE pattern ?
+        		BEQ ++               		; if yes, next pattern!
+.end		INC Tick           			; inc frame counter                                             
+            	BNE +
+		INC Tick+1                                                                          
++           	LDA Tick+1
+		LDX iTFrames
+            	CMP THFrames,X
+            	BNE .quit
+            	LDA Tick
+            	CMP TLFrames,X
+            	BNE .quit
+		INC bMark				; = 1
+		INC iTFrames
+.quit		RTS
+
+++       		; next pattern
+		LDA #PATTERNSIZE
+        		STA count1Pat
+        		INC indexPat
+        		LDX indexPat
+
+INIT_PATTERN
+        		; init pattern
+        		LDA D_REG0,X
+        		STA dREG0
+        		LDA D_REG0+NBPATTERNS,X
+        		STA dREG0+1
+        		LDY #00
+        		LDA (dREG0),Y
+		STA nREG0
+		INY
+		LDA (dREG0),Y
+		STA vREG0
+		INY
+        		STY iREG0
+        		LDA D_REG1,X
+        		STA dREG1
+        		LDA D_REG1+NBPATTERNS,X
+        		STA dREG1+1
+        		LDY #00
+        		LDA (dREG1),Y
+		STA nREG1
+		INY
+		LDA (dREG1),Y
+		STA vREG1
+		INY
+        		STY iREG1
+        		LDA D_REG2,X
+        		STA dREG2
+        		LDA D_REG2+NBPATTERNS,X
+        		STA dREG2+1
+        		LDY #00
+        		LDA (dREG2),Y
+		STA nREG2
+		INY
+		LDA (dREG2),Y
+		STA vREG2
+		INY
+        		STY iREG2
+        		LDA D_REG3,X
+        		STA dREG3
+        		LDA D_REG3+NBPATTERNS,X
+        		STA dREG3+1
+        		LDY #00
+        		LDA (dREG3),Y
+		STA nREG3
+		INY
+		LDA (dREG3),Y
+		STA vREG3
+		INY
+        		STY iREG3
+        		LDA D_REG4,X
+        		STA dREG4
+        		LDA D_REG4+NBPATTERNS,X
+        		STA dREG4+1
+        		LDY #00
+        		LDA (dREG4),Y
+		STA nREG4
+		INY
+		LDA (dREG4),Y
+		STA vREG4
+		INY
+        		STY iREG4
+        		LDA D_REG5,X
+        		STA dREG5
+        		LDA D_REG5+NBPATTERNS,X
+        		STA dREG5+1
+        		LDY #00
+        		LDA (dREG5),Y
+		STA nREG5
+		INY
+		LDA (dREG5),Y
+		STA vREG5
+		INY
+        		STY iREG5
+        		LDA D_REG6,X
+        		STA dREG6
+        		LDA D_REG6+NBPATTERNS,X
+        		STA dREG6+1
+        		LDY #00
+        		LDA (dREG6),Y
+		STA nREG6
+		INY
+		LDA (dREG6),Y
+		STA vREG6
+		INY
+        		STY iREG6
+        		LDA D_REG7,X
+        		STA dREG7
+        		LDA D_REG7+NBPATTERNS,X
+        		STA dREG7+1
+        		LDY #00
+        		LDA (dREG7),Y
+		STA nREG7
+		INY
+		LDA (dREG7),Y
+		STA vREG7
+		INY
+        		STY iREG7
+        		LDA D_REG8,X
+        		STA dREG8
+        		LDA D_REG8+NBPATTERNS,X
+        		STA dREG8+1
+        		LDY #00
+        		LDA (dREG8),Y
+		STA nREG8
+		INY
+		LDA (dREG8),Y
+		STA vREG8
+		INY
+        		STY iREG8
+        		LDA D_REG9,X
+        		STA dREG9
+        		LDA D_REG9+NBPATTERNS,X
+        		STA dREG9+1
+        		LDY #00
+        		LDA (dREG9),Y
+		STA nREG9
+		INY
+		LDA (dREG9),Y
+		STA vREG9
+		INY
+        		STY iREG9
+        		LDA D_REGA,X
+        		STA dREGA
+        		LDA D_REGA+NBPATTERNS,X
+        		STA dREGA+1
+        		LDY #00
+        		LDA (dREGA),Y
+		STA nREGA
+		INY
+		LDA (dREGA),Y
+		STA vREGA
+		INY
+        		STY iREGA
+        		LDA D_REGB,X
+        		STA dREGB
+        		LDA D_REGB+NBPATTERNS,X
+        		STA dREGB+1
+        		LDY #00
+        		LDA (dREGB),Y
+		STA nREGB
+		INY
+		LDA (dREGB),Y
+		STA vREGB
+		INY
+        		STY iREGB
+        		LDA D_REGD,X
+        		STA dREGD
+        		LDA D_REGD+NBPATTERNS,X
+        		STA dREGD+1
+        		LDY #00
+        		LDA (dREGD),Y
+		STA nREGD
+		INY
+		LDA (dREGD),Y
+		STA vREGD
+		STA oldREGD
+        		INY
+        		STY iREGD
+		JMP .end
+
+; =================================================================================================
+NBPATTERNS = 48             ; MAX 255
+PATTERNSIZE  = 64           ; MAX 128
+FRAMEMAX     = 2920
+PATLOOP      = 4
+
+D_REG0 = $6000
+D_REG1 = $6536
+D_REG2 = $65E4
+D_REG3 = $6C12
+D_REG4 = $6C74
+D_REG5 = $700E
+D_REG6 = $722A
+D_REG7 = $7374
+D_REG8 = $7656
+D_REG9 = $7940
+D_REGA = $7BD6
+D_REGB = $7DC8
+D_REGD = $7F4E
+
+; =================================================================================================
+!align 255,0
+WAIT65              ; = attend Y * 65 cycles exactement (JSR/RTS compris -> APPEL EN 8 cycles obligatoire -> LDY #xx / JSR WAIT65)
+WAIT65ZP = * + 1    ; = attend Y * 65 cycles exactement (JSR/RTS compris -> APPEL EN 9 cycles obligatoire -> LDY ZP / JSR WAIT65Z)
+!zone           
+		LDA $EA     ; 3 (dummy)  -> on arrive sur NOP si JSR WAIT65Z
+WAIT62      	; = attend 1*62 cycles exactement (JSR/RTS compris -> LDY #01 / JSR WAIT63)
+            	DEY			; 2					
+		BEQ .S1	    ; 3/2			
+                  
+.WL1 	    	LDX #$0B				            
+.WL2 	    	DEX							
+		BNE .WL2	; 2 + (2+3)*10 + 2 + 2 = 56															
+                      
+		NOP			; 2					
+		NOP			; 2					
+		DEY			; 2					
+		BNE .WL1	; (56+2+2+2+3)*(Y-2) + 56 + 2 + 2 + 2 + 2 = 65*Y - 2*65 + 64 = 65*Y - 66				
+
+WAIT59      	; = attend 1*59 cycles exactement (JSR/RTS compris -> LDY #xx / JSR WAIT59)											                      
+		LDX #$08					
+.WL3 	    	DEX							
+		BNE .WL3	; 2 + (2+3)*7 + 2 + 2 = 41					
+                							
+		NOP			; 2					
+		NOP			; 2					
+		RTS			; 6
+
+                    ; WAIT62 = 2 + 2 + (65-66) + 41 + 2 + 2 + 6 + (8) = 62 
+                    ; WAIT65 = 3 + 2 + 2 + (65*Y-66) + 41 + 2 + 2 + 6 + (8) = 65*Y
+                    ; WAIT59 = 41 + 2 + 2 + 6 + (8) = 59 					
+
+WAIT57      	; = attend 1*57 cycles exactement (JSR/RTS compris -> LDY #xx / JSR WAIT57)											         
+.S1		NOP         ; 2
+WAIT55      	; = attend 1*55 cycles exactement (JSR/RTS compris -> LDY #xx / JSR WAIT55)	
+            	LDX #08					
+                      
+.WL4 	    	DEX							
+		BNE .WL4    ; 2 + (2+3)*7 + 2 + 2 = 41					
+		RTS         ; 6
+                    ; = 49
+
+                    ; WAIT65 = 3 + 2 + 3 + 49 + (8) = 65
+                    ; WAIT62 = 2 + 3 + 49 + (8) = 62
+                    ; WAIT57 = 49 + (8) = 57
+                    ; WAIT55 = 47 + (8) = 55
+; =============================================================================	
+TLFrames		!byte <256, <512, <768,<1152,<1280,<1408,<1536,<1664,<2048,<2304,<2560,<2816,<FRAMEMAX
+THFrames		!byte >256, >512, >768,>1152,>1280,>1408,>1536,>1664,>2048,>2304,>2560,>2816,>FRAMEMAX
+
+; =============================================================================	
+
+; =================================================================================================
+ROUTINE_RUN	; x = 0
+		; first DISPLAY LINE
+!zone
+; -------------------------------------------------------------------------------------------------
+; DISPLAY PART
+		LDY #33
+		; PART I
+LLines_P1		
+		; 65 cycles
+		LSR TBUFFER,X			; 7 (6502 ONLY! 6 if 65C02)	; current line	
+		BCS P1_1				; 2/3			; = 1 ?
+		BNE P1_2				; 2/3			; = 2 ?
+					
+		; 7+2+2 = 11
+mod_AN3_1
+P1_0		STA $C05F				; +4
+		JSR full_hgr			; +6 + [34]
+		DEY				; +2
+		NOP : NOP				; +4
+		BEQ P2				; +2/3
+		JMP LLines_P1			; +3
+						; = 11 + 6 + [34] + 3 + 2 + 4 + 2 + 3 = 65
+
+		; 7+3 = 10
+P1_1		STA $C05F				; +4
+		JSR full_gr			; +6 + [38]
+		DEY				; +2
+		BEQ P2				; +2/3
+		JMP LLines_P1			; +3
+						; = 10 + 6 + [38] + 2 + 2 + 2 + 3 = 65
+
+		; 7+2+3 = 12
+P1_2		STA $C05F				; +4
+		STA $C056				; +4
+		JSR full_gr2			; + [32]
+		DEY				; +2
+		BEQ P2				; +2/3
+		JMP LLines_P1			; +3
+						
+						
+P2		LDY #120				; 3+2
+		
+		; PART II
+LLines_P2	
+		; 65 cycles
+		LSR TBUFFER,X			
+		BCS P2_1				
+		BNE P2_2							
+mod_AN3_2
+P2_0		STA $C05F				
+		JSR full_hgr
+		DEY
+		NOP : NOP
+		BEQ P3				
+		JMP LLines_P2			
+
+P2_1		STA $C05F
+		JSR full_gr
+		DEY
+		BEQ P3				
+		JMP LLines_P2			
+
+		; 7+2+3 = 12
+P2_2		STA $C05F				; 4
+		STA $C056				; 4
+		NOP : NOP : NOP : NOP		; 8
+		STA $C057				; 4
+		NOP : LDA $AC			; 5
+		LDA #00				; 2				
+		STA TBUFFER,X			; 5
+		INX				; 2
+		DEY				; 2
+		NOP : STA $AC			; 5
+		STA $C056				; 4
+		STA $AC				; 3
+		BEQ P3				; 2
+		JMP LLines_P2			; 3
+						; = 65 
+		
+P3		LDY #23
+		
+		; PART III
+LLines_P3	
+		; 65 cycles
+		LSR TBUFFER,X				
+		BCS P3_1				
+		BNE P3_2							
+mod_AN3_3
+P3_0		STA $C05F				
+		JSR full_hgr
+		DEY
+		NOP : NOP
+		BEQ NEXT				
+		JMP LLines_P3			
+
+P3_1		STA $C05F
+		JSR full_gr
+		DEY
+		BEQ NEXT				
+		JMP LLines_P3			
+
+P3_2		STA $C05F
+		STA $C056
+		JSR full_gr2
+		DEY
+		BEQ NEXT				
+		JMP LLines_P3
+
+NEXT		STA $C057			; restore default mode			
+; -------------------------------------------------------------------------------------------------
+; SCROLL PART I: swap hires colors
+		DEC count
+		BNE +
+mod_scroll	LDA #$FF
+		STA count		
+		LDA mod2+1
+		EOR #($5E XOR $5F)
+		STA mod2+1
++
+mod2		STA $C05F
+; -------------------------------------------------------------------------------------------------
+; RASTER BARS PART
+
+		LDX IndexBar1		
+		LDY TableSinus,X		
+		LDA TableSinSens,X
+		BEQ +
+		LDA #$02
+		!byte $2C
++		LDA #$01
+		LDX #20
+-		STA TBUFFER,Y		
+		INY			
+		DEX
+		BNE -
+mod_bar1_1	BIT IndexBar1			; ($E6 = INC) 
+mod_bar1_2	BIT IndexBar1
+		INC IndexBar1
+
+		LDX IndexBar2		
+		LDY TableSinus,X		
+		LDA TableSinSens,X
+		BEQ +
+		LDA #$02
+		!byte $2C
++		LDA #$01
+		LDX #20
+		STX temp
+-		LDX TBUFFER,Y
+		CPX #01
+		BEQ +
+add_bar2
+		BIT TBUFFER			; ($2C= BIT / $99 = STA)	
++		INY			
+		DEC temp
+		BNE -
+mod_bar2_1	BIT IndexBar2
+mod_bar2_2	BIT IndexBar2
+		INC IndexBar2
+
+		LDX IndexBar3		
+		LDY TableSinus,X		
+		LDA TableSinSens,X
+		BEQ +
+		LDA #$02
+		!byte $2C
++		LDA #$01
+		LDX #20
+		STX temp
+-		LDX TBUFFER,Y
+		CPX #01
+		BEQ +
+add_bar3
+		BIT TBUFFER			; ($2C= BIT / $99 = STA)			
++		INY			
+		DEC temp
+		BNE -
+mod_bar3_1	BIT IndexBar3
+mod_bar3_2	BIT IndexBar3
+		INC IndexBar3
+
+		LDX IndexBar4		
+		LDY TableSinus,X		
+		LDA TableSinSens,X
+		BEQ +
+		LDA #$02
+		!byte $2C
++		LDA #$01
+		LDX #20
+		STX temp
+-		LDX TBUFFER,Y
+		CPX #01
+		BEQ +
+add_bar4
+		BIT TBUFFER			; ($2C= BIT / $99 = STA)		
++		INY			
+		DEC temp
+		BNE -
+mod_bar4_1	BIT IndexBar4
+mod_bar4_2	BIT IndexBar4
+		INC IndexBar4
+; -------------------------------------------------------------------------------------------------
+; SCROLL PART Ib: swap hires colors (back to default)
+		STA $C05F
+; -------------------------------------------------------------------------------------------------
+		JSR SWAPAN3
+		DEC count2
+		BEQ +
+mod_effect1	JSR NOEFFECT
+mod_effect2	JSR NOEFFECT
+		RTS
+; -------------------------------------------------------------------------------------------------
++		LDA #02
+		STA count2
+; -------------------------------------------------------------------------------------------------
+; SCROLL PART II: new row/letter
+		; row for current letter	
+		DEC row
+		BNE .next_row
+
+		INC mod_letter+1
+		BNE mod_letter
+		INC mod_letter+2
+mod_letter	LDX ScrollText-1
+		BPL .skip
+		; reinit
+		LDA #>ScrollText	
+		STA mod_letter+2			
+		LDA #<ScrollText
+		STA mod_letter+1			
+		LDX ScrollText
+.skip		
+		LDA TNBROW, X
+          	STA row
+          	LDA TLINE0, X
+		STA L0
+          	LDA TLINE1, X
+		STA L1
+          	LDA TLINE2, X
+		STA L2
+          	LDA TLINE3, X
+		STA L3
+          	LDA TLINE4, X
+		STA L4
+		LDA TLINE5, X
+		STA L5
+
+.next_row		LSR L0
+		BCS +
+		LDA #$80
+		!byte $2C
++		LDA #160
+		STA modline0+1
+
+		LSR L1
+		BCS +
+		LDA #$80
+		!byte $2C
++		LDA #160
+		STA modline1+1
+
+		LSR L2
+		BCS +
+		LDA #$80
+		!byte $2C
++		LDA #160
+		STA modline2+1
+
+		LSR L3
+		BCS +
+		LDA #$80
+		!byte $2C
++		LDA #160
+		STA modline3+1
+		
+		LSR L4
+		BCS +
+		LDA #$80
+		!byte $2C
++		LDA #160
+		STA modline4+1
+
+		LSR L5
+		BCS +
+		LDA #$80
+		!byte $2C
++		LDA #160
+		STA modline5+1
+; -------------------------------------------------------------------------------------------------
+; SCROLL PART III - scroll text
+
+modline0		LDA #$AC
+          	LDX $4f77
+          	ORA TDECALL,X
+          	STA $4f77
+          	LDA TBITS,X
+          	LDX $4f76
+          	ORA TDECALL,X
+          	STA $4f76
+          	LDA TBITS,X
+          	LDX $4f75
+          	ORA TDECALL,X
+          	STA $4f75
+          	LDA TBITS,X
+          	LDX $4f74
+          	ORA TDECALL,X
+          	STA $4f74
+          	LDA TBITS,X
+          	LDX $4f73
+          	ORA TDECALL,X
+          	STA $4f73
+          	LDA TBITS,X
+          	LDX $4f72
+          	ORA TDECALL,X
+          	STA $4f72
+          	LDA TBITS,X
+          	LDX $4f71
+          	ORA TDECALL,X
+          	STA $4f71
+          	LDA TBITS,X
+          	LDX $4f70
+          	ORA TDECALL,X
+          	STA $4f70
+          	LDA TBITS,X
+          	LDX $4f6f
+          	ORA TDECALL,X
+          	STA $4f6f
+          	LDA TBITS,X
+          	LDX $4f6e
+          	ORA TDECALL,X
+          	STA $4f6e
+          	LDA TBITS,X
+          	LDX $4f6d
+          	ORA TDECALL,X
+          	STA $4f6d
+          	LDA TBITS,X
+          	LDX $4f6c
+          	ORA TDECALL,X
+          	STA $4f6c
+          	LDA TBITS,X
+          	LDX $4f6b
+          	ORA TDECALL,X
+          	STA $4f6b
+          	LDA TBITS,X
+          	LDX $4f6a
+          	ORA TDECALL,X
+          	STA $4f6a
+          	LDA TBITS,X
+          	LDX $4f69
+          	ORA TDECALL,X
+          	STA $4f69
+          	LDA TBITS,X
+          	LDX $4f68
+          	ORA TDECALL,X
+          	STA $4f68
+          	LDA TBITS,X
+          	LDX $4f67
+          	ORA TDECALL,X
+          	STA $4f67
+          	LDA TBITS,X
+          	LDX $4f66
+          	ORA TDECALL,X
+          	STA $4f66
+          	LDA TBITS,X
+          	LDX $4f65
+          	ORA TDECALL,X
+          	STA $4f65
+          	LDA TBITS,X
+          	LDX $4f64
+          	ORA TDECALL,X
+          	STA $4f64
+          	LDA TBITS,X
+          	LDX $4f63
+          	ORA TDECALL,X
+          	STA $4f63
+          	LDA TBITS,X
+          	LDX $4f62
+          	ORA TDECALL,X
+          	STA $4f62
+          	LDA TBITS,X
+          	LDX $4f61
+          	ORA TDECALL,X
+          	STA $4f61
+          	LDA TBITS,X
+          	LDX $4f60
+          	ORA TDECALL,X
+          	STA $4f60
+          	LDA TBITS,X
+          	LDX $4f5f
+          	ORA TDECALL,X
+          	STA $4f5f
+          	LDA TBITS,X
+          	LDX $4f5e
+          	ORA TDECALL,X
+          	STA $4f5e
+          	LDA TBITS,X
+          	LDX $4f5d
+          	ORA TDECALL,X
+          	STA $4f5d
+          	LDA TBITS,X
+          	LDX $4f5c
+          	ORA TDECALL,X
+          	STA $4f5c
+          	LDA TBITS,X
+          	LDX $4f5b
+          	ORA TDECALL,X
+          	STA $4f5b
+          	LDA TBITS,X
+          	LDX $4f5a
+          	ORA TDECALL,X
+          	STA $4f5a
+          	LDA TBITS,X
+          	LDX $4f59
+          	ORA TDECALL,X
+          	STA $4f59
+          	LDA TBITS,X
+          	LDX $4f58
+          	ORA TDECALL,X
+          	STA $4f58
+          	LDA TBITS,X
+          	LDX $4f57
+          	ORA TDECALL,X
+          	STA $4f57
+          	LDA TBITS,X
+          	LDX $4f56
+          	ORA TDECALL,X
+          	STA $4f56
+          	LDA TBITS,X
+          	LDX $4f55
+          	ORA TDECALL,X
+          	STA $4f55
+          	LDA TBITS,X
+          	LDX $4f54
+          	ORA TDECALL,X
+          	STA $4f54
+          	LDA TBITS,X
+          	LDX $4f53
+          	ORA TDECALL,X
+          	STA $4f53
+          	LDA TBITS,X
+          	LDX $4f52
+          	ORA TDECALL,X
+          	STA $4f52
+          	LDA TBITS,X
+          	LDX $4f51
+          	ORA TDECALL,X
+          	STA $4f51
+          	LDA TBITS,X
+          	LDX $4f50
+          	ORA TDECALL,X
+          	STA $4f50	
+modline1        	LDA #$AC
+          	LDX $5777
+          	ORA TDECALL,X
+          	STA $5777
+          	LDA TBITS,X
+          	LDX $5776
+          	ORA TDECALL,X
+          	STA $5776
+          	LDA TBITS,X
+          	LDX $5775
+          	ORA TDECALL,X
+          	STA $5775
+          	LDA TBITS,X
+          	LDX $5774
+          	ORA TDECALL,X
+          	STA $5774
+          	LDA TBITS,X
+          	LDX $5773
+          	ORA TDECALL,X
+          	STA $5773
+          	LDA TBITS,X
+          	LDX $5772
+          	ORA TDECALL,X
+          	STA $5772
+          	LDA TBITS,X
+          	LDX $5771
+          	ORA TDECALL,X
+          	STA $5771
+          	LDA TBITS,X
+          	LDX $5770
+          	ORA TDECALL,X
+          	STA $5770
+          	LDA TBITS,X
+          	LDX $576f
+          	ORA TDECALL,X
+          	STA $576f
+          	LDA TBITS,X
+          	LDX $576e
+          	ORA TDECALL,X
+          	STA $576e
+          	LDA TBITS,X
+          	LDX $576d
+          	ORA TDECALL,X
+          	STA $576d
+          	LDA TBITS,X
+          	LDX $576c
+          	ORA TDECALL,X
+          	STA $576c
+          	LDA TBITS,X
+          	LDX $576b
+          	ORA TDECALL,X
+          	STA $576b
+          	LDA TBITS,X
+          	LDX $576a
+          	ORA TDECALL,X
+          	STA $576a
+          	LDA TBITS,X
+          	LDX $5769
+          	ORA TDECALL,X
+          	STA $5769
+          	LDA TBITS,X
+          	LDX $5768
+          	ORA TDECALL,X
+          	STA $5768
+          	LDA TBITS,X
+          	LDX $5767
+          	ORA TDECALL,X
+          	STA $5767
+          	LDA TBITS,X
+          	LDX $5766
+          	ORA TDECALL,X
+          	STA $5766
+          	LDA TBITS,X
+          	LDX $5765
+          	ORA TDECALL,X
+          	STA $5765
+          	LDA TBITS,X
+          	LDX $5764
+          	ORA TDECALL,X
+          	STA $5764
+          	LDA TBITS,X
+          	LDX $5763
+          	ORA TDECALL,X
+          	STA $5763
+          	LDA TBITS,X
+          	LDX $5762
+          	ORA TDECALL,X
+          	STA $5762
+          	LDA TBITS,X
+          	LDX $5761
+          	ORA TDECALL,X
+          	STA $5761
+          	LDA TBITS,X
+          	LDX $5760
+          	ORA TDECALL,X
+          	STA $5760
+          	LDA TBITS,X
+          	LDX $575f
+          	ORA TDECALL,X
+          	STA $575f
+          	LDA TBITS,X
+          	LDX $575e
+          	ORA TDECALL,X
+          	STA $575e
+          	LDA TBITS,X
+          	LDX $575d
+          	ORA TDECALL,X
+          	STA $575d
+          	LDA TBITS,X
+          	LDX $575c
+          	ORA TDECALL,X
+          	STA $575c
+          	LDA TBITS,X
+          	LDX $575b
+          	ORA TDECALL,X
+          	STA $575b
+          	LDA TBITS,X
+          	LDX $575a
+          	ORA TDECALL,X
+          	STA $575a
+          	LDA TBITS,X
+          	LDX $5759
+          	ORA TDECALL,X
+          	STA $5759
+          	LDA TBITS,X
+          	LDX $5758
+          	ORA TDECALL,X
+          	STA $5758
+          	LDA TBITS,X
+          	LDX $5757
+          	ORA TDECALL,X
+          	STA $5757
+          	LDA TBITS,X
+          	LDX $5756
+          	ORA TDECALL,X
+          	STA $5756
+          	LDA TBITS,X
+          	LDX $5755
+          	ORA TDECALL,X
+          	STA $5755
+          	LDA TBITS,X
+          	LDX $5754
+          	ORA TDECALL,X
+          	STA $5754
+          	LDA TBITS,X
+          	LDX $5753
+          	ORA TDECALL,X
+          	STA $5753
+          	LDA TBITS,X
+          	LDX $5752
+          	ORA TDECALL,X
+          	STA $5752
+          	LDA TBITS,X
+          	LDX $5751
+          	ORA TDECALL,X
+          	STA $5751
+          	LDA TBITS,X
+          	LDX $5750
+          	ORA TDECALL,X
+          	STA $5750	
+modline2        	LDA #$AC
+          	LDX $5f77
+          	ORA TDECALL,X
+          	STA $5f77
+          	LDA TBITS,X
+          	LDX $5f76
+          	ORA TDECALL,X
+          	STA $5f76
+          	LDA TBITS,X
+          	LDX $5f75
+          	ORA TDECALL,X
+          	STA $5f75
+          	LDA TBITS,X
+          	LDX $5f74
+          	ORA TDECALL,X
+          	STA $5f74
+          	LDA TBITS,X
+          	LDX $5f73
+          	ORA TDECALL,X
+          	STA $5f73
+          	LDA TBITS,X
+          	LDX $5f72
+          	ORA TDECALL,X
+          	STA $5f72
+          	LDA TBITS,X
+          	LDX $5f71
+          	ORA TDECALL,X
+          	STA $5f71
+          	LDA TBITS,X
+          	LDX $5f70
+          	ORA TDECALL,X
+          	STA $5f70
+          	LDA TBITS,X
+          	LDX $5f6f
+          	ORA TDECALL,X
+          	STA $5f6f
+          	LDA TBITS,X
+          	LDX $5f6e
+          	ORA TDECALL,X
+          	STA $5f6e
+          	LDA TBITS,X
+          	LDX $5f6d
+          	ORA TDECALL,X
+          	STA $5f6d
+          	LDA TBITS,X
+          	LDX $5f6c
+          	ORA TDECALL,X
+          	STA $5f6c
+          	LDA TBITS,X
+          	LDX $5f6b
+          	ORA TDECALL,X
+          	STA $5f6b
+          	LDA TBITS,X
+          	LDX $5f6a
+          	ORA TDECALL,X
+          	STA $5f6a
+          	LDA TBITS,X
+          	LDX $5f69
+          	ORA TDECALL,X
+          	STA $5f69
+          	LDA TBITS,X
+          	LDX $5f68
+          	ORA TDECALL,X
+          	STA $5f68
+          	LDA TBITS,X
+          	LDX $5f67
+          	ORA TDECALL,X
+          	STA $5f67
+          	LDA TBITS,X
+          	LDX $5f66
+          	ORA TDECALL,X
+          	STA $5f66
+          	LDA TBITS,X
+          	LDX $5f65
+          	ORA TDECALL,X
+          	STA $5f65
+          	LDA TBITS,X
+          	LDX $5f64
+          	ORA TDECALL,X
+          	STA $5f64
+          	LDA TBITS,X
+          	LDX $5f63
+          	ORA TDECALL,X
+          	STA $5f63
+          	LDA TBITS,X
+          	LDX $5f62
+          	ORA TDECALL,X
+          	STA $5f62
+          	LDA TBITS,X
+          	LDX $5f61
+          	ORA TDECALL,X
+          	STA $5f61
+          	LDA TBITS,X
+          	LDX $5f60
+          	ORA TDECALL,X
+          	STA $5f60
+          	LDA TBITS,X
+          	LDX $5f5f
+          	ORA TDECALL,X
+          	STA $5f5f
+          	LDA TBITS,X
+          	LDX $5f5e
+          	ORA TDECALL,X
+          	STA $5f5e
+          	LDA TBITS,X
+          	LDX $5f5d
+          	ORA TDECALL,X
+          	STA $5f5d
+          	LDA TBITS,X
+          	LDX $5f5c
+          	ORA TDECALL,X
+          	STA $5f5c
+          	LDA TBITS,X
+          	LDX $5f5b
+          	ORA TDECALL,X
+          	STA $5f5b
+          	LDA TBITS,X
+          	LDX $5f5a
+          	ORA TDECALL,X
+          	STA $5f5a
+          	LDA TBITS,X
+          	LDX $5f59
+          	ORA TDECALL,X
+          	STA $5f59
+          	LDA TBITS,X
+          	LDX $5f58
+          	ORA TDECALL,X
+          	STA $5f58
+          	LDA TBITS,X
+          	LDX $5f57
+          	ORA TDECALL,X
+          	STA $5f57
+          	LDA TBITS,X
+          	LDX $5f56
+          	ORA TDECALL,X
+          	STA $5f56
+          	LDA TBITS,X
+          	LDX $5f55
+          	ORA TDECALL,X
+          	STA $5f55
+          	LDA TBITS,X
+          	LDX $5f54
+          	ORA TDECALL,X
+          	STA $5f54
+          	LDA TBITS,X
+          	LDX $5f53
+          	ORA TDECALL,X
+          	STA $5f53
+          	LDA TBITS,X
+          	LDX $5f52
+          	ORA TDECALL,X
+          	STA $5f52
+          	LDA TBITS,X
+          	LDX $5f51
+          	ORA TDECALL,X
+          	STA $5f51
+          	LDA TBITS,X
+          	LDX $5f50
+          	ORA TDECALL,X
+          	STA $5f50	
+modline3        	LDA #$AC
+          	LDX $47f7
+          	ORA TDECALL,X
+          	STA $47f7
+          	LDA TBITS,X
+          	LDX $47f6
+          	ORA TDECALL,X
+          	STA $47f6
+          	LDA TBITS,X
+          	LDX $47f5
+          	ORA TDECALL,X
+          	STA $47f5
+          	LDA TBITS,X
+          	LDX $47f4
+          	ORA TDECALL,X
+          	STA $47f4
+          	LDA TBITS,X
+          	LDX $47f3
+          	ORA TDECALL,X
+          	STA $47f3
+          	LDA TBITS,X
+          	LDX $47f2
+          	ORA TDECALL,X
+          	STA $47f2
+          	LDA TBITS,X
+          	LDX $47f1
+          	ORA TDECALL,X
+          	STA $47f1
+          	LDA TBITS,X
+          	LDX $47f0
+          	ORA TDECALL,X
+          	STA $47f0
+          	LDA TBITS,X
+          	LDX $47ef
+          	ORA TDECALL,X
+          	STA $47ef
+          	LDA TBITS,X
+          	LDX $47ee
+          	ORA TDECALL,X
+          	STA $47ee
+          	LDA TBITS,X
+          	LDX $47ed
+          	ORA TDECALL,X
+          	STA $47ed
+          	LDA TBITS,X
+          	LDX $47ec
+          	ORA TDECALL,X
+          	STA $47ec
+          	LDA TBITS,X
+          	LDX $47eb
+          	ORA TDECALL,X
+          	STA $47eb
+          	LDA TBITS,X
+          	LDX $47ea
+          	ORA TDECALL,X
+          	STA $47ea
+          	LDA TBITS,X
+          	LDX $47e9
+          	ORA TDECALL,X
+          	STA $47e9
+          	LDA TBITS,X
+          	LDX $47e8
+          	ORA TDECALL,X
+          	STA $47e8
+          	LDA TBITS,X
+          	LDX $47e7
+          	ORA TDECALL,X
+          	STA $47e7
+          	LDA TBITS,X
+          	LDX $47e6
+          	ORA TDECALL,X
+          	STA $47e6
+          	LDA TBITS,X
+          	LDX $47e5
+          	ORA TDECALL,X
+          	STA $47e5
+          	LDA TBITS,X
+          	LDX $47e4
+          	ORA TDECALL,X
+          	STA $47e4
+          	LDA TBITS,X
+          	LDX $47e3
+          	ORA TDECALL,X
+          	STA $47e3
+          	LDA TBITS,X
+          	LDX $47e2
+          	ORA TDECALL,X
+          	STA $47e2
+          	LDA TBITS,X
+          	LDX $47e1
+          	ORA TDECALL,X
+          	STA $47e1
+          	LDA TBITS,X
+          	LDX $47e0
+          	ORA TDECALL,X
+          	STA $47e0
+          	LDA TBITS,X
+          	LDX $47df
+          	ORA TDECALL,X
+          	STA $47df
+          	LDA TBITS,X
+          	LDX $47de
+          	ORA TDECALL,X
+          	STA $47de
+          	LDA TBITS,X
+          	LDX $47dd
+          	ORA TDECALL,X
+          	STA $47dd
+          	LDA TBITS,X
+          	LDX $47dc
+          	ORA TDECALL,X
+          	STA $47dc
+          	LDA TBITS,X
+          	LDX $47db
+          	ORA TDECALL,X
+          	STA $47db
+          	LDA TBITS,X
+          	LDX $47da
+          	ORA TDECALL,X
+          	STA $47da
+          	LDA TBITS,X
+          	LDX $47d9
+          	ORA TDECALL,X
+          	STA $47d9
+          	LDA TBITS,X
+          	LDX $47d8
+          	ORA TDECALL,X
+          	STA $47d8
+          	LDA TBITS,X
+          	LDX $47d7
+          	ORA TDECALL,X
+          	STA $47d7
+          	LDA TBITS,X
+          	LDX $47d6
+          	ORA TDECALL,X
+          	STA $47d6
+          	LDA TBITS,X
+          	LDX $47d5
+          	ORA TDECALL,X
+          	STA $47d5
+          	LDA TBITS,X
+          	LDX $47d4
+          	ORA TDECALL,X
+          	STA $47d4
+          	LDA TBITS,X
+          	LDX $47d3
+          	ORA TDECALL,X
+          	STA $47d3
+          	LDA TBITS,X
+          	LDX $47d2
+          	ORA TDECALL,X
+          	STA $47d2
+          	LDA TBITS,X
+          	LDX $47d1
+          	ORA TDECALL,X
+          	STA $47d1
+          	LDA TBITS,X
+          	LDX $47d0
+          	ORA TDECALL,X
+          	STA $47d0	
+modline4        	LDA #$AC
+          	LDX $4ff7
+          	ORA TDECALL,X
+          	STA $4ff7
+          	LDA TBITS,X
+          	LDX $4ff6
+          	ORA TDECALL,X
+          	STA $4ff6
+          	LDA TBITS,X
+          	LDX $4ff5
+          	ORA TDECALL,X
+          	STA $4ff5
+          	LDA TBITS,X
+          	LDX $4ff4
+          	ORA TDECALL,X
+          	STA $4ff4
+          	LDA TBITS,X
+          	LDX $4ff3
+          	ORA TDECALL,X
+          	STA $4ff3
+          	LDA TBITS,X
+          	LDX $4ff2
+          	ORA TDECALL,X
+          	STA $4ff2
+          	LDA TBITS,X
+          	LDX $4ff1
+          	ORA TDECALL,X
+          	STA $4ff1
+          	LDA TBITS,X
+          	LDX $4ff0
+          	ORA TDECALL,X
+          	STA $4ff0
+          	LDA TBITS,X
+          	LDX $4fef
+          	ORA TDECALL,X
+          	STA $4fef
+          	LDA TBITS,X
+          	LDX $4fee
+          	ORA TDECALL,X
+          	STA $4fee
+          	LDA TBITS,X
+          	LDX $4fed
+          	ORA TDECALL,X
+          	STA $4fed
+          	LDA TBITS,X
+          	LDX $4fec
+          	ORA TDECALL,X
+          	STA $4fec
+          	LDA TBITS,X
+          	LDX $4feb
+          	ORA TDECALL,X
+          	STA $4feb
+          	LDA TBITS,X
+          	LDX $4fea
+          	ORA TDECALL,X
+          	STA $4fea
+          	LDA TBITS,X
+          	LDX $4fe9
+          	ORA TDECALL,X
+          	STA $4fe9
+          	LDA TBITS,X
+          	LDX $4fe8
+          	ORA TDECALL,X
+          	STA $4fe8
+          	LDA TBITS,X
+          	LDX $4fe7
+          	ORA TDECALL,X
+          	STA $4fe7
+          	LDA TBITS,X
+          	LDX $4fe6
+          	ORA TDECALL,X
+          	STA $4fe6
+          	LDA TBITS,X
+          	LDX $4fe5
+          	ORA TDECALL,X
+          	STA $4fe5
+          	LDA TBITS,X
+          	LDX $4fe4
+          	ORA TDECALL,X
+          	STA $4fe4
+          	LDA TBITS,X
+          	LDX $4fe3
+          	ORA TDECALL,X
+          	STA $4fe3
+          	LDA TBITS,X
+          	LDX $4fe2
+          	ORA TDECALL,X
+          	STA $4fe2
+          	LDA TBITS,X
+          	LDX $4fe1
+          	ORA TDECALL,X
+          	STA $4fe1
+          	LDA TBITS,X
+          	LDX $4fe0
+          	ORA TDECALL,X
+          	STA $4fe0
+          	LDA TBITS,X
+          	LDX $4fdf
+          	ORA TDECALL,X
+          	STA $4fdf
+          	LDA TBITS,X
+          	LDX $4fde
+          	ORA TDECALL,X
+          	STA $4fde
+          	LDA TBITS,X
+          	LDX $4fdd
+          	ORA TDECALL,X
+          	STA $4fdd
+          	LDA TBITS,X
+          	LDX $4fdc
+          	ORA TDECALL,X
+          	STA $4fdc
+          	LDA TBITS,X
+          	LDX $4fdb
+          	ORA TDECALL,X
+          	STA $4fdb
+          	LDA TBITS,X
+          	LDX $4fda
+          	ORA TDECALL,X
+          	STA $4fda
+          	LDA TBITS,X
+          	LDX $4fd9
+          	ORA TDECALL,X
+          	STA $4fd9
+          	LDA TBITS,X
+          	LDX $4fd8
+          	ORA TDECALL,X
+          	STA $4fd8
+          	LDA TBITS,X
+          	LDX $4fd7
+          	ORA TDECALL,X
+          	STA $4fd7
+          	LDA TBITS,X
+          	LDX $4fd6
+          	ORA TDECALL,X
+          	STA $4fd6
+          	LDA TBITS,X
+          	LDX $4fd5
+          	ORA TDECALL,X
+          	STA $4fd5
+          	LDA TBITS,X
+          	LDX $4fd4
+          	ORA TDECALL,X
+          	STA $4fd4
+          	LDA TBITS,X
+          	LDX $4fd3
+          	ORA TDECALL,X
+          	STA $4fd3
+          	LDA TBITS,X
+          	LDX $4fd2
+          	ORA TDECALL,X
+          	STA $4fd2
+          	LDA TBITS,X
+          	LDX $4fd1
+          	ORA TDECALL,X
+          	STA $4fd1
+          	LDA TBITS,X
+          	LDX $4fd0
+          	ORA TDECALL,X
+          	STA $4fd0	
+modline5        	LDA #$AC
+          	LDX $57f7
+          	ORA TDECALL,X
+          	STA $57f7
+          	LDA TBITS,X
+          	LDX $57f6
+          	ORA TDECALL,X
+          	STA $57f6
+          	LDA TBITS,X
+          	LDX $57f5
+          	ORA TDECALL,X
+          	STA $57f5
+          	LDA TBITS,X
+          	LDX $57f4
+          	ORA TDECALL,X
+          	STA $57f4
+          	LDA TBITS,X
+          	LDX $57f3
+          	ORA TDECALL,X
+          	STA $57f3
+          	LDA TBITS,X
+          	LDX $57f2
+          	ORA TDECALL,X
+          	STA $57f2
+          	LDA TBITS,X
+          	LDX $57f1
+          	ORA TDECALL,X
+          	STA $57f1
+          	LDA TBITS,X
+          	LDX $57f0
+          	ORA TDECALL,X
+          	STA $57f0
+          	LDA TBITS,X
+          	LDX $57ef
+          	ORA TDECALL,X
+          	STA $57ef
+          	LDA TBITS,X
+          	LDX $57ee
+          	ORA TDECALL,X
+          	STA $57ee
+          	LDA TBITS,X
+          	LDX $57ed
+          	ORA TDECALL,X
+          	STA $57ed
+          	LDA TBITS,X
+          	LDX $57ec
+          	ORA TDECALL,X
+          	STA $57ec
+          	LDA TBITS,X
+          	LDX $57eb
+          	ORA TDECALL,X
+          	STA $57eb
+          	LDA TBITS,X
+          	LDX $57ea
+          	ORA TDECALL,X
+          	STA $57ea
+          	LDA TBITS,X
+          	LDX $57e9
+          	ORA TDECALL,X
+          	STA $57e9
+          	LDA TBITS,X
+          	LDX $57e8
+          	ORA TDECALL,X
+          	STA $57e8
+          	LDA TBITS,X
+          	LDX $57e7
+          	ORA TDECALL,X
+          	STA $57e7
+          	LDA TBITS,X
+          	LDX $57e6
+          	ORA TDECALL,X
+          	STA $57e6
+          	LDA TBITS,X
+          	LDX $57e5
+          	ORA TDECALL,X
+          	STA $57e5
+          	LDA TBITS,X
+          	LDX $57e4
+          	ORA TDECALL,X
+          	STA $57e4
+          	LDA TBITS,X
+          	LDX $57e3
+          	ORA TDECALL,X
+          	STA $57e3
+          	LDA TBITS,X
+          	LDX $57e2
+          	ORA TDECALL,X
+          	STA $57e2
+          	LDA TBITS,X
+          	LDX $57e1
+          	ORA TDECALL,X
+          	STA $57e1
+          	LDA TBITS,X
+          	LDX $57e0
+          	ORA TDECALL,X
+          	STA $57e0
+          	LDA TBITS,X
+          	LDX $57df
+          	ORA TDECALL,X
+          	STA $57df
+          	LDA TBITS,X
+          	LDX $57de
+          	ORA TDECALL,X
+          	STA $57de
+          	LDA TBITS,X
+          	LDX $57dd
+          	ORA TDECALL,X
+          	STA $57dd
+          	LDA TBITS,X
+          	LDX $57dc
+          	ORA TDECALL,X
+          	STA $57dc
+          	LDA TBITS,X
+          	LDX $57db
+          	ORA TDECALL,X
+          	STA $57db
+          	LDA TBITS,X
+          	LDX $57da
+          	ORA TDECALL,X
+          	STA $57da
+          	LDA TBITS,X
+          	LDX $57d9
+          	ORA TDECALL,X
+          	STA $57d9
+          	LDA TBITS,X
+          	LDX $57d8
+          	ORA TDECALL,X
+          	STA $57d8
+          	LDA TBITS,X
+          	LDX $57d7
+          	ORA TDECALL,X
+          	STA $57d7
+          	LDA TBITS,X
+          	LDX $57d6
+          	ORA TDECALL,X
+          	STA $57d6
+          	LDA TBITS,X
+          	LDX $57d5
+          	ORA TDECALL,X
+          	STA $57d5
+          	LDA TBITS,X
+          	LDX $57d4
+          	ORA TDECALL,X
+          	STA $57d4
+          	LDA TBITS,X
+          	LDX $57d3
+          	ORA TDECALL,X
+          	STA $57d3
+          	LDA TBITS,X
+          	LDX $57d2
+          	ORA TDECALL,X
+          	STA $57d2
+          	LDA TBITS,X
+          	LDX $57d1
+          	ORA TDECALL,X
+          	STA $57d1
+          	LDA TBITS,X
+          	LDX $57d0
+          	ORA TDECALL,X
+          	STA $57d0	
+		RTS
+; =================================================================================================
+ROUTINE_INIT	
+		LDA #>ScrollText	
+		STA mod_letter+2			
+		LDA #<ScrollText
+		STA mod_letter+1
+		LDA #5+1				; row for space	
+		STA row
+		LDA #00
+            	STA L0
+            	STA L1
+            	STA L2
+            	STA L3
+            	STA L4
+		STA L5
+		STA IndexBar1
+		STA IndexDataPic
+		STA IndexLineColor	
+		STA IndexColor
+		STA IndexSlice
+		STA countswap
+		STA indexswap
+		LDA #YPIC
+		STA IndexLinePic
+		LDA #128
+		STA IndexBar2
+		LSR				; LDA #64
+		STA IndexBar3
+		LDA #192
+		STA IndexBar4
+		STA indexsineff4
+		LDA #$FF
+		STA count
+		LDA #02
+		STA count2
+		STA count3	
+		RTS
+; =================================================================================================
+!align 255,0
+
+TDECALL 		!byte  128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 129, 129, 128, 128, 130, 128, 130, 128, 128, 128, 128, 128, 132, 132, 128, 128, 133, 133, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 136, 136, 136, 128, 137, 137, 128, 128, 138, 138, 138, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 144, 144, 144, 128, 145, 128, 128, 128, 146, 128, 146, 128, 128, 128, 128, 128, 148, 148, 148, 128, 149, 149, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+TBITS		!byte 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 192, 160, 128, 128, 192, 128, 128, 128, 128, 160, 128, 128, 128, 128, 128, 128, 192, 128, 128, 128, 192, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 192, 160, 128, 128, 192, 128, 128, 128, 192, 160, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 192, 160, 128, 128, 128, 128, 128, 128, 128, 160, 128, 128, 128, 128, 128, 128, 192, 160, 128, 128, 192, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+
+TLINE0 		!byte 0, 15, 15, 15, 7, 15, 15, 15, 9, 1, 4, 9, 1, 27, 17, 15, 15, 15, 15, 15, 31, 9, 9, 21, 9, 9, 15, 0, 0, 0, 1, 1, 0, 0, 7, 2, 7, 5, 10, 14, 119
+TLINE1 		!byte 0, 9, 9, 1, 9, 1, 1, 1, 9, 1, 4, 9, 1, 31, 19, 9, 9, 9, 9, 1, 4, 9, 9, 21, 9, 9, 8, 0, 0, 0, 1, 0, 0, 56, 5, 3, 4, 5, 10, 17, 20
+TLINE2 		!byte 0, 9, 9, 1, 9, 1, 1, 1, 9, 1, 4, 5, 1, 21, 23, 9, 9, 9, 9, 1, 4, 9, 9, 21, 9, 9, 4, 0, 0, 1, 1, 1, 2, 44, 5, 2, 4, 10, 5, 8, 20
+TLINE3 		!byte 0, 15, 15, 1, 9, 7, 7, 13, 15, 1, 4, 3, 1, 21, 29, 9, 15, 9, 15, 15, 4, 9, 9, 21, 6, 15, 2, 0, 2, 0, 1, 1, 7, 52, 5, 2, 7, 0, 0, 4, 20
+TLINE4 		!byte 0, 9, 9, 1, 9, 1, 1, 9, 9, 1, 5, 5, 1, 21, 25, 9, 1, 13, 5, 8, 4, 9, 6, 31, 9, 6, 1, 0, 2, 1, 0, 1, 2, 28, 5, 2, 1, 0, 0, 0, 20
+TLINE5 		!byte 0, 9, 15, 15, 7, 15, 1, 15, 9, 1, 7, 9, 7, 21, 17, 15, 1, 15, 9, 15, 4, 15, 6, 27, 9, 6, 15, 1, 1, 0, 1, 1, 0, 0, 7, 2, 7, 0, 0, 4, 119
+TNBROW 		!byte 5, 5, 5, 5, 5, 5, 5, 5, 5, 2, 4, 5, 4, 6, 6, 5, 5, 5, 5, 5, 6, 5, 5, 6, 5, 5, 5, 2, 3, 4, 2, 2, 4, 8, 4, 3, 4, 5, 5, 6, 8
+
+!convtab "specialtxt.bin" {
+ScrollText
+		!Text "                          ",0x25,"OLDSKOOL FORT ET VERT",0x26," FOR APPLE & RELEASED AT SHADOW PARTY 2021! CODE+GFX:GROUiK*MUSIC:DUBMOOD+ZOOM. GREETZ TO ARKOS*BRUTAL DELUXE*COSINE*DEFENCE FORCE*DESIRE*IMPHOBIA*NINJAFORCE. DO YOU THINK YOU CAN DO BETTER GFX ? I AGREE... SO CONTACT US!"
+		!byte $FF
+}
+; -------------------------------------------------------------------------------------------------
+EFFECT1		; starfield 3D
+!zone
+XMIN = 70
+XMAX = 175
+YMIN = 60
+YMAX = 125
+
+		LDA #$0F
+		STA IndexStar
+L_STARS
+		LDX IndexStar
+		LDA TNewStar,X
+		BNE .s0				
+		JMP .NEWSTAR				
+		
+		; erase old star
+.s0		LDA TSaveYLo,X
+		STA .OFF1+1
+		LDA TSaveYHi,X
+		STA .OFF1+2
+		
+		LDY TAbscisse,X
+		LDA TableABS,Y
+		TAY
+		LDA #00
+.OFF1		STA $2000,Y
+
+		; compute new coord
+		LDA TAbscisse,X
+		CLC
+		ADC TAddABS,X
+		LDY TDeplacement,X
+		BPL .go1
+		CLC
+		ADC TAddABS,X
+		
+.go1		CMP #XMIN
+		BCC .ns1
+		CMP #XMAX
+		BCC .s1
+.ns1		JMP .NEWSTAR
+		
+.s1		STA TAbscisse,X
+
+		LDA TOrdonne,X
+		CLC
+		ADC TAddORD,X
+		LDY TDeplacement,X
+		BPL .go2
+		CLC
+		ADC TAddORD,X
+		
+.go2		CMP #YMIN
+		BCC .ns2
+		CMP #YMAX
+		BCC .s2
+.ns2		JMP .NEWSTAR
+		
+.s2		STA TOrdonne,X
+		
+.DISPLAYSTAR
+		LDY TAbscisse,X
+		LDA TableByteStar,Y
+		DEC TDeplacement,X
+		BPL .go4
+		
+		CMP #$40
+		BEQ .go3
+		INY
+		ORA TableByteStar,Y
+		JMP .go4
+.go3		DEY
+		ORA TableByteStar,Y
+.go4
+		STA .OFF2+1
+		LDA TOrdonne,X
+		TAY
+		LDA THB,Y
+		STA .OFF3+1
+		STA TSaveYLo,X
+		LDA THH,Y
+		STA .OFF3+2
+		STA TSaveYHi,X
+		
+		LDY TAbscisse,X
+		LDA TableABS,Y
+		TAY
+.OFF2		LDA #$00
+.OFF3		STA $2000,Y
+ 		
+ 		DEC IndexStar
+ 		BMI .go5
+ 		JMP L_STARS		
+.go5 	
+		RTS
+ ; --------------------------------------------------------		
+.NEWSTAR
+		LDA $C404
+		AND #07
+		TAY
+		LDA TNewABS,Y
+		STA TAbscisse,X
+		LDA TNewAdd,Y
+		STA TAddABS,X
+		
+		LDA $C405
+		AND #07
+		TAY
+		LDA TNewORD,Y
+		STA TOrdonne,X
+		LDA TNewAdd,Y
+		STA TAddORD,X
+		
+		LDA #$1A
+		STA TDeplacement,X
+		STA TNewStar,X
+		JMP .DISPLAYSTAR
+; -------------------------------------------------------------------------------------------------
+!align 255,0
+
+full_hgr		; 34 CYCLES 
+!zone
+		STA $C057				; 4
+		LDA $AC
+		LDA #00				; 2				
+		STA TBUFFER,X			; 5
+		INX 				; 2
+		NOP : NOP : NOP : NOP 		; 8
+		LDA $AC		 		; 3  
+		RTS				; 6
+
+full_gr		; 38 CYCLES
+!zone
+		STA $C056				; 4
+		NOP				; 2
+		; 32 cycles
+full_gr2		LDA #00				; 2				
+		STA TBUFFER,X			; 5
+		INX 				; 2
+		NOP : NOP : NOP			; 6 
+		NOP : NOP : LDA $AC 		; 7
+		NOP : NOP				; 4
+		RTS				; 6
+; =============================================================================
+!align 255,0
+		
+TableSinus
+		!by 154,155,155,156,156,157,157,157,157,158,158,158,158,158,158,158
+      		!by 158,158,157,157,157,156,156,156,155,154,154,153,153,152,151,150
+      		!by 149,148,148,147,146,144,143,142,141,140,139,137,136,135,133,132
+      		!by 130,129,127,126,124,123,121,119,118,116,114,112,111,109,107,105
+      		!by 103,102,100,98,96,94,92,90,88,86,84,82,81,79,77,75
+      		!by 73,71,69,67,65,63,61,59,58,56,54,52,50,48,47,45
+      		!by 43,41,40,38,36,35,33,32,30,29,27,26,24,23,22,20
+      		!by 19,18,16,15,14,13,12,11,10,9,8,7,7,6,5,4
+      		!by 4,3,3,2,2,1,1,1,1,0,0,0,0,0,0,0
+      		!by 0,0,1,1,1,2,2,2,3,4,4,5,5,6,7,8
+      		!by 9,10,10,11,12,14,15,16,17,18,19,21,22,23,25,26
+      		!by 28,29,31,32,34,35,37,39,40,42,44,46,47,49,51,53
+      		!by 55,56,58,60,62,64,66,68,70,72,74,76,77,79,81,83
+      		!by 85,87,89,91,93,95,97,99,100,102,104,106,108,110,111,113
+      		!by 115,117,118,120,122,123,125,126,128,129,131,132,134,135,136,138
+      		!by 139,140,142,143,144,145,146,147,148,149,150,151,151,152,153,154
+	
+ 
+TableSinSens	!byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+TBUFFER 		!fill 168,00	
+; =============================================================================
+THB     		!byte 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+        		!byte 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
+        		!byte 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+        		!byte 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
+        		!byte 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+        		!byte 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
+        		!byte 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+        		!byte 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
+        		!byte 0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28
+        		!byte 0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8
+        		!byte 0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28
+        		!byte 0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8
+        		!byte 0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28
+        		!byte 0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8
+        		!byte 0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28
+        		!byte 0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8
+        		!byte 0x50,0x50,0x50,0x50,0x50,0x50,0x50,0x50
+        		!byte 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0
+        		!byte 0x50,0x50,0x50,0x50,0x50,0x50,0x50,0x50
+        		!byte 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0
+        		!byte 0x50,0x50,0x50,0x50,0x50,0x50,0x50,0x50
+        		!byte 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0
+        		!byte 0x50,0x50,0x50,0x50,0x50,0x50,0x50,0x50
+        		!byte 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0
+
+THH     		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
+        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
+        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
+        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
+        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
+        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
+        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
+        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
+        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
+        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
+        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
+        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
+        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
+        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
+        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
+        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
+        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
+        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
+        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
+        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
+        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
+        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
+        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
+        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
+
+TableABS
+		!byte $00,$00,$00,$00,$00,$00,$00
+		!byte $01,$01,$01,$01,$01,$01,$01
+		!byte $02,$02,$02,$02,$02,$02,$02
+		!byte $03,$03,$03,$03,$03,$03,$03
+		!byte $04,$04,$04,$04,$04,$04,$04
+		!byte $05,$05,$05,$05,$05,$05,$05
+		!byte $06,$06,$06,$06,$06,$06,$06
+		!byte $07,$07,$07,$07,$07,$07,$07
+		!byte $08,$08,$08,$08,$08,$08,$08
+		!byte $09,$09,$09,$09,$09,$09,$09
+		!byte $0a,$0a,$0a,$0a,$0a,$0a,$0a
+		!byte $0b,$0b,$0b,$0b,$0b,$0b,$0b
+		!byte $0c,$0c,$0c,$0c,$0c,$0c,$0c
+		!byte $0d,$0d,$0d,$0d,$0d,$0d,$0d
+		!byte $0e,$0e,$0e,$0e,$0e,$0e,$0e
+		!byte $0f,$0f,$0f,$0f,$0f,$0f,$0f
+		!byte $10,$10,$10,$10,$10,$10,$10
+		!byte $11,$11,$11,$11,$11,$11,$11
+		!byte $12,$12,$12,$12,$12,$12,$12
+		!byte $13,$13,$13,$13,$13,$13,$13
+		!byte $14,$14,$14,$14,$14,$14,$14
+		!byte $15,$15,$15,$15,$15,$15,$15
+		!byte $16,$16,$16,$16,$16,$16,$16
+		!byte $17,$17,$17,$17,$17,$17,$17
+		!byte $18,$18,$18,$18,$18,$18,$18
+		!byte $19,$19,$19,$19,$19,$19,$19
+		!byte $1a,$1a,$1a,$1a,$1a,$1a,$1a
+		!byte $1b,$1b,$1b,$1b,$1b,$1b,$1b
+		!byte $1c,$1c,$1c,$1c,$1c,$1c,$1c
+		!byte $1d,$1d,$1d,$1d,$1d,$1d,$1d
+		!byte $1e,$1e,$1e,$1e,$1e,$1e,$1e
+		!byte $1f,$1f,$1f,$1f,$1f,$1f,$1f
+		!byte $20,$20,$20,$20,$20,$20,$20
+		!byte $21,$21,$21,$21,$21,$21,$21
+		!byte $22,$22,$22,$22,$22,$22,$22
+		!byte $23,$23,$23,$23,$23,$23,$23
+		!byte $24,$24,$24,$24
+
+TableByteStar
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08,$10,$20,$40
+		!byte $01,$02,$04,$08
+		
+; =============================================================================
+; for each star:
+TSaveYLo		!byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+TSaveYHi 		!byte $20,$20,$20,$20,$20,$20,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+
+TAbscisse		!byte XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX,XMAX
+TOrdonne		!byte YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX,YMAX
+
+TAddABS		!byte $01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01
+TAddORD		!byte $01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01,$01
+
+TDeplacement 	!byte $1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A
+TNewStar		!byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+
+; new star:
+TNewABS		!byte $73,$76,$7D,$84,$8B,$8B,$92,$94
+TNewORD		!byte $42,$46,$51,$52,$57,$5C,$62,$65
+
+TNewAdd		!byte $FE,$FE,$FE,$FF,$01,$02,$02,$03	
+; =============================================================================
+EFFECT2		; display PIC
+YPIC = 75
+XPIC = 11
+!zone
+		LDX IndexLinePic
+mod_effect2_1	CPX #(YPIC+32)
+		BEQ +		; do nothing
+		LDA THB,X
+		STA .mod_dest+1
+		LDA THH,X
+		STA .mod_dest+2
+		INX
+		INX
+		STX IndexLinePic
+
+		LDY IndexDataPic
+		LDX #XPIC
+mod_picture
+.loop		LDA FT_PIC,Y 
+.mod_dest		STA $0000,X
+		INY
+		INX
+		CPX #(XPIC+15)
+		BNE .loop
+		STY IndexDataPic
++		RTS
+; -----------------------------------------------------------------------------
+FT_PIC		!byte 124, 127, 67, 127, 15, 126, 127, 97, 3, 6, 124, 127, 112, 1, 3, 112, 127, 115, 127, 63, 120, 127, 121, 79, 31, 124, 127, 124, 103, 15, 124, 1, 112, 31, 60, 126, 0, 120, 79, 31, 63, 0, 124, 103, 15, 124, 127, 115, 127, 63, 126, 127, 121, 79, 31, 63, 0, 124, 127, 15, 124, 127, 115, 127, 15, 126, 127, 121, 127, 31, 63, 0, 124, 127, 15, 124, 1, 112, 127, 63, 126, 0, 120, 127, 31, 63, 0, 124, 103, 15, 124, 1, 112, 31, 63, 126, 127, 121, 79, 31, 127, 127, 124, 103, 15, 124, 1, 64, 7, 12, 126, 127, 97, 3, 6, 124, 127, 112, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 120, 127, 1, 127, 7, 60, 120, 64, 127, 15, 30, 60, 0, 0, 0, 126, 127, 121, 15, 30, 63, 120, 124, 7, 64, 31, 60, 0, 0, 0, 96, 15, 120, 15, 30, 63, 120, 124, 7, 64, 127, 63, 0, 0, 0, 96, 15, 120, 15, 30, 63, 120, 124, 7, 64, 127, 63, 0, 0, 0, 96, 15, 120, 15, 30, 63, 120, 124, 7, 64, 31, 60, 0, 0, 0, 96, 15, 120, 127, 31, 127, 127, 124, 127, 67, 31, 60, 0, 0, 0, 96, 15, 96, 127, 7, 127, 127, 112, 127, 79, 31, 60, 0, 0
+PRESENT_PIC	!byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 126, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 31, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 70, 127, 67, 127, 67, 127, 67, 127, 67, 127, 67, 99, 115, 127, 27, 118, 103, 115, 103, 115, 7, 112, 7, 112, 7, 112, 103, 3, 30, 24, 118, 103, 115, 127, 112, 127, 115, 127, 115, 127, 115, 127, 3, 30, 24, 118, 127, 112, 127, 112, 7, 0, 96, 115, 7, 112, 127, 3, 30, 24, 118, 7, 112, 103, 115, 127, 115, 127, 115, 127, 115, 115, 3, 30, 24, 118, 1, 112, 103, 115, 127, 112, 127, 112, 127, 112, 97, 3, 30, 24, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 126, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+OLD_PIC		!byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 124, 127, 124, 1, 127, 31, 127, 103, 127, 103, 127, 121, 63, 126, 0, 12, 96, 76, 1, 3, 24, 3, 102, 24, 102, 64, 25, 48, 102, 0, 12, 96, 76, 1, 3, 24, 3, 102, 24, 102, 64, 25, 48, 102, 0, 76, 103, 76, 1, 51, 24, 115, 103, 0, 102, 76, 25, 51, 102, 0, 76, 103, 76, 1, 115, 25, 115, 103, 0, 102, 76, 25, 51, 102, 0, 76, 103, 76, 1, 115, 25, 3, 102, 96, 103, 76, 25, 51, 102, 0, 76, 103, 76, 1, 115, 25, 3, 102, 0, 102, 76, 25, 51, 102, 0, 76, 103, 76, 1, 51, 24, 63, 102, 0, 102, 76, 25, 51, 102, 0, 12, 96, 76, 31, 3, 24, 3, 102, 24, 102, 64, 25, 48, 102, 15, 12, 96, 12, 24, 3, 24, 3, 102, 24, 102, 64, 25, 48, 6, 12, 124, 127, 124, 31, 127, 31, 127, 103, 127, 103, 127, 121, 63, 126, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 96, 24, 86, 101, 96, 48, 48, 13, 75, 97, 0, 0, 0, 0, 0, 96, 24, 86, 99, 96, 48, 112, 13, 71, 97, 0, 0, 0
+; =============================================================================
+EFFECT3		; change GR Colors
+!zone
+		LDX IndexLineColor
+		LDA TTL,X
+		STA .mod_dest+1
+		LDA TTH,X
+		STA .mod_dest+2
+		INX
+		CPX #24
+		BNE +
+		LDX #00
++		STX IndexLineColor
+
+		LDX #39
+		LDA IndexColor
+mod_color		ORA #$CF
+-
+.mod_dest		STA $0000,X
+		DEX
+		BPL -
+
+		LDX IndexColor
+		INX
+		CPX #$10
+		BNE +
+		LDX #00
++		STX IndexColor
+NOEFFECT		RTS		
+				
+TTH		!byte $08,$08,$09,$09,$0A,$0A,$0B,$0B,$08,$08,$09,$09,$0A,$0A,$0B,$0B,$08,$08,$09,$09,$0A,$0A,$0B,$0B
+TTL  		!byte $00,$80,$00,$80,$00,$80,$00,$80,$28,$A8,$28,$A8,$28,$A8,$28,$A8,$50,$D0,$50,$D0,$50,$D0,$50,$D0
+; =============================================================================		
+EFFECT4		; OLDSKOOL appearance
+!zone	
+		LDX IndexLinePic
+		CPX #(YPIC+32)
+		BEQ ++			; reinit
+
+		LDA THB,X
+		STA .mod_dest+1
+		LDA THH,X
+		STA .mod_dest+2
+		INX
+		INX
+		STX IndexLinePic
+		
+		LDX indexsineff4
+		LDA TableSinus,X
+		STA .mod_sin+1
+		INC indexsineff4
+		LDY IndexDataPic
+
+		LDX #XPIC
+
+.lx		LDA #$17
+.mod_sin		CMP #$AC
+		BCC +
+		LDA OLD_PIC,Y
+		!byte $2C
++		LDA #00
+.mod_dest		STA $0000,X
+		LDA .lx+1
+		ADC #$E7
+		STA .lx+1
+		INY
+		INX
+		CPX #(XPIC+15)
+		BNE .lx
+		STY IndexDataPic
+		RTS
+
+++		LDA #YPIC
+		STA IndexLinePic
+		LDA #00 
+		STA IndexDataPic
+		RTS
+; =============================================================================
+SWAPAN3
+!zone
+mod_swap		RTS			; RTS/NOP ($60/$EA)
+		LDA countswap		; during a swap ?
+		BNE +
+		DEC count3
+		BNE .skip
+		LDA #DURATION
+		STA countswap		; init swap timing
+		INC indexswap
+		LDX indexswap
+		LDA TableSwap,X		; reinit count3
+		STA count3
+		LDA #$5E			; active swap
+		STA mod_AN3_1+1
+		STA mod_AN3_2+1
+		STA mod_AN3_3+1
+		RTS
+
+		; during a swap
++		DEC countswap
+		BNE .skip	
+		LDA #$5F			; desactive swap
+		STA mod_AN3_1+1
+		STA mod_AN3_2+1
+		STA mod_AN3_3+1
+.skip		RTS
+; -----------------------------------------------------------------------------
+DURATION = 3
+TableSwap		!byte 0,16-DURATION,64-DURATION, 40-DURATION, 16-DURATION, 8-DURATION, 64-DURATION, 32-DURATION,4-DURATION,4-DURATION,4-DURATION,4-DURATION,4-DURATION,4-DURATION,4-DURATION
+		!byte 32-DURATION,32-DURATION,32-DURATION,32-DURATION,32-DURATION,32-DURATION,32-DURATION,8-DURATION,8-DURATION,4-DURATION,4-DURATION,4-DURATION,4-DURATION,4-DURATION,4-DURATION
+; =============================================================================
+
+ENDMAIN
