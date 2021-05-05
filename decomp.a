@@ -8,6 +8,7 @@
 ;
 ; 05/2021
 ;
+; v0.03 - add "jingle"
 ; v0.02 - add mini display while unpacking
 ; v0.01 - first commit
 ; 
@@ -31,7 +32,28 @@ index		= $D7
 ; =============================================================================
 START
 !zone
-		LDY #00
+		; jingle
+		LDY #$D0
+-		BIT $C030
+		LDA #$09
+		JSR $FCA8
+		DEY
+		BNE -
+		LDX #02
+		STX token
+--		LDY #$D0
+-		BIT $C030
+.MODJING		LDA #$07
+		JSR $FCA8
+		DEY
+		BNE -
+		LDA #$05
+		STA .MODJING+1
+		DEC token
+		BNE --
+		; -----------------
+		
+		; LDY #00
 		STY lenH
 		STY lenL
 		LDA #<(COMPDATA+16)    		; shunte LZ4 header

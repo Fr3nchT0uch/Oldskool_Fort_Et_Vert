@@ -8,6 +8,7 @@
 ; GFX: GROUiK
 ;
 ; 05/2021
+; v0.03 - add more bars color change
 ; v0.02 - add CPU detection + cycles fix for 65C02
 ; v0.01 - first commit (from BETA 1)
 ; 
@@ -121,7 +122,7 @@ IndexStar		= $EF
 IndexLinePic	= $EE
 IndexDataPic	= $ED
 IndexLineColor	= $EC
-IndexColor	= $EB
+GRColor		= $EB
 IndexSlice	= $EA
 countswap		= $E9
 indexswap		= $E8
@@ -344,6 +345,7 @@ Loop4		LDA bMark
 		; f = 1152
 		; OLDSKOOL appearance (finished)
 		; 2 bars
+		; change bars color
 		; speed = 2
 		LDA #$99
 		STA add_bar2
@@ -352,6 +354,12 @@ Loop4		LDA bMark
 		STA mod_bar2_2
 		STA mod_bar3_2
 		STA mod_bar4_2
+		LDA #<EFFECT3
+		STA mod_effect2+1
+		LDA #>EFFECT3
+		STA mod_effect2+2
+		LDA #$F6
+		STA GRColor
 
 Loop5		LDA bMark
 		BEQ Loop5
@@ -359,8 +367,11 @@ Loop5		LDA bMark
 
 		; f = 1280
 		; 3 bars
+		; change bars color
 		LDA #$99
 		STA add_bar3
+		LDA #$F7
+		STA GRColor
 
 Loop6		LDA bMark
 		BEQ Loop6
@@ -368,8 +379,11 @@ Loop6		LDA bMark
 
 		; f = 1408
 		; 4 bars
+		; change bars color
 		LDA #$99
 		STA add_bar4
+		LDA #$7E
+		STA GRColor
 
 Loop7		LDA bMark
 		BEQ Loop7
@@ -377,11 +391,14 @@ Loop7		LDA bMark
 
 		; f = 1536
 		; speed high
+		; change bars color
 		LDA #$E6
 		STA mod_bar1_1
 		STA mod_bar2_1
 		STA mod_bar3_1
 		STA mod_bar4_1
+		LDA #$FC
+		STA GRColor
 
 Loop7b		LDA bMark
 		BEQ Loop7b
@@ -400,15 +417,13 @@ Loop8		LDA bMark
 
 		; f = 2048
 		; stop swap AN3
-		; switch bars color
+		; change bars color
 		; accelerate "AN3" for scroll
 		LDA #$60
 		STA mod_swap
-		LDA #<EFFECT3
-		STA mod_effect2+1
-		LDA #>EFFECT3
-		STA mod_effect2+2
 		LSR mod_scroll+1
+		LDA #$DF
+		STA GRColor
 
 Loop9		LDA bMark
 		BEQ Loop9
@@ -423,7 +438,7 @@ Loop9		LDA bMark
 		LDA #>EFFECT1
 		STA mod_effect1+2
 		LDA #$9F
-		STA mod_color+1
+		STA GRColor
 		LSR mod_scroll+1
 
 Loop10		LDA bMark
@@ -439,7 +454,7 @@ Loop10		LDA bMark
 		LDA #16
 		STA count3
 		LDA #$5F
-		STA mod_color+1
+		STA GRColor
 		LSR mod_scroll+1
 
 Loop11		LDA bMark
@@ -2416,7 +2431,6 @@ ROUTINE_INIT
 		STA IndexBar1
 		STA IndexDataPic
 		STA IndexLineColor	
-		STA IndexColor
 		STA IndexSlice
 		STA countswap
 		STA indexswap
@@ -2816,19 +2830,12 @@ EFFECT3		; change GR Colors
 +		STX IndexLineColor
 
 		LDX #39
-		LDA IndexColor
-mod_color		ORA #$CF
--
-.mod_dest		STA $0000,X
+		LDA GRColor
+.mod_dest
+-		STA $0000,X
 		DEX
 		BPL -
 
-		LDX IndexColor
-		INX
-		CPX #$10
-		BNE +
-		LDX #00
-+		STX IndexColor
 NOEFFECT		RTS		
 				
 TTH		!byte $08,$08,$09,$09,$0A,$0A,$0B,$0B,$08,$08,$09,$09,$0A,$0A,$0B,$0B,$08,$08,$09,$09,$0A,$0A,$0B,$0B
