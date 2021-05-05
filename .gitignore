@@ -5,3 +5,4 @@ lbl_*.txt
 cw.code-workspace
 build.bat
 *.dsk
+*.lz4
