@@ -6,3 +6,5 @@ cw.code-workspace
 build.bat
 *.dsk
 *.lz4
+TEST/
+
