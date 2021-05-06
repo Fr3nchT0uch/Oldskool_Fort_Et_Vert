@@ -430,7 +430,7 @@ Loop8		LDA bMark
 		STA mod_effect2+2
 		LDA #$FF
 		STA GRColor
-		LDA #$BB
+		LDA #$00
 		STA GRColor2
 
 Loop9		LDA bMark
@@ -439,16 +439,18 @@ Loop9		LDA bMark
 
 		; f = 2304
 		; starfield
-		; change bars color
+		; bars : back to stadnard pattern
 		; accelerate "AN3" for scroll
 		LDA #<EFFECT1
 		STA mod_effect1+1
 		LDA #>EFFECT1
 		STA mod_effect1+2
-		LDA #$FF
+		LDA #<EFFECT3B
+		STA mod_effect2+1
+		LDA #>EFFECT3B
+		STA mod_effect2+2
+		LDA #$0F
 		STA GRColor
-		LDA #$00
-		STA GRColor2
 		LSR mod_scroll+1
 
 Loop10		LDA bMark
@@ -463,10 +465,6 @@ Loop10		LDA bMark
 		STA mod_swap
 		LDA #16
 		STA count3
-		LDA #<EFFECT3B
-		STA mod_effect2+1
-		LDA #>EFFECT3B
-		STA mod_effect2+2
 		LDA #$5F
 		STA GRColor
 		LSR mod_scroll+1
@@ -2480,7 +2478,7 @@ TNBROW 		!byte 5, 5, 5, 5, 5, 5, 5, 5, 5, 2, 4, 5, 4, 6, 6, 5, 5, 5, 5, 5, 6, 5,
 
 !convtab "specialtxt.bin" {
 ScrollText
-		!Text "                          ",0x25,"OLDSKOOL FORT ET VERT",0x26," FOR APPLE & RELEASED AT SHADOW PARTY 2021! CODE+GFX:GROUiK*MUSIC:DUBMOOD+Z00M. GREETZ TO ARKOS*BRUTAL DELUXE*COSINE*DEFENCE FORCE*DESIRE*IMPHOBIA*NINJAFORCE. DO YOU THINK YOU CAN DO BETTER GFX ? I AGREE... SO CONTACT US!"
+		!Text "                          ",0x25,"OLDSKOOL FORT ET VERT",0x26," FOR APPLE & RELEASED AT SHADOW PARTY 2021! MUSIC:DUBMOOD+Z00M*CODE+GFX:GROUiK. GREETZ TO ARKOS*BRUTAL DELUXE*COSINE*DEFENCE FORCE*DESIRE*IMPHOBIA*NINJAFORCE. DO YOU THINK YOU CAN DO BETTER GFX ? I AGREE... SO CONTACT US!"
 		!byte $FF
 }
 ; -------------------------------------------------------------------------------------------------
@@ -2845,52 +2843,9 @@ EFFECT3		; change GR Colors
 +		STX IndexLineColor
 
 		LDY Indexcolor
-		LDA GRColor
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
+		LDX #20
+
+-		LDA GRColor
 		INY
 		CPY #40
 		BNE +
@@ -2902,155 +2857,8 @@ EFFECT3		; change GR Colors
 		BNE +
 		LDY #00
 +		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		LDA GRColor
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		LDA GRColor2
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		LDA GRColor
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		LDA GRColor2
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
-		INY
-		CPY #40
-		BNE +
-		LDY #00
-+		STA (cdest),Y
+		DEX
+		BNE -
 
 		INY
 		CPY #40
