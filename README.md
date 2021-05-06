@@ -2,7 +2,7 @@
 
 An 11KB INTRO for Apple IIe with Mockingboard
 
-v0.03 - 05/2021
+v0.04 - 05/2021
    
 **code + gfx:** GROUiK  
 **music:** DUBMOOD + z00m  

@@ -8,6 +8,7 @@
 ;
 ; 05/2021
 ;
+; v0.04 - add "HOME" at launch
 ; v0.03 - add "jingle"
 ; v0.02 - add mini display while unpacking
 ; v0.01 - first commit
@@ -32,6 +33,7 @@ index		= $D7
 ; =============================================================================
 START
 !zone
+		JSR $FC58				; HOME (ROM)
 		; jingle
 		LDY #$D0
 -		BIT $C030
