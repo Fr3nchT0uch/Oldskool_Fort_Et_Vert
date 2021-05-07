@@ -8,6 +8,7 @@
 ; GFX: GROUiK
 ;
 ; 05/2021
+; v0.06 - new pattern for alt bars 
 ; v0.05 - minor updates + size opt (fill "!align holes")
 ; v0.04 - new color pattern for bars (EFFECT3B added)
 ; v0.03 - add more bars color change
@@ -2620,8 +2621,16 @@ L_STARS
 		STA TDeplacement,X
 		STA TNewStar,X
 		JMP .DISPLAYSTAR
+; --------------------------------------------------------	
+; data saved for each star (dynamic data)
+TSaveYLo		= $2000
+TSaveYHi		= $2010
+TAbscisse		= $2020
+TOrdonne		= $2030
+TAddABS		= $2040
+TAddORD		= $2050
 ; =============================================================================
-EFFECT3		; change GR Colors
+EFFECT3		; change GR Colors	(alt)
 !zone
 		LDX IndexLineColor
 		LDA TTL,X
@@ -2635,7 +2644,7 @@ EFFECT3		; change GR Colors
 +		STX IndexLineColor
 
 		LDY Indexcolor
-		LDX #20
+		LDX #10
 
 -		LDA GRColor
 		INY
@@ -2649,6 +2658,18 @@ EFFECT3		; change GR Colors
 		BNE +
 		LDY #00
 +		STA (cdest),Y
+		INY
+		CPY #40
+		BNE +
+		LDY #00
++		STA (cdest),Y
+		LDA GRColor
+		INY
+		CPY #40
+		BNE +
+		LDY #00
++		STA (cdest),Y
+
 		DEX
 		BNE -
 
@@ -2656,11 +2677,15 @@ EFFECT3		; change GR Colors
 		CPY #40
 		BNE +
 		LDY #00
++		INY
+		CPY #40
+		BNE +
+		LDY #00
 +		STY Indexcolor
 
 NOEFFECT		RTS		
 ; =============================================================================	
-EFFECT3B		; change GR Colors
+EFFECT3B		; change GR Colors (default)
 !zone
 		LDX IndexLineColor
 		LDA TTL,X
@@ -2681,8 +2706,7 @@ EFFECT3B		; change GR Colors
 		BPL -
 		RTS
 ; =============================================================================
-!align 255,0
-		
+!align 255,0	
 TableSinus
 		!by 154,155,155,156,156,157,157,157,157,158,158,158,158,158,158,158
       		!by 158,158,157,157,157,156,156,156,155,154,154,153,153,152,151,150
@@ -2703,7 +2727,7 @@ TableSinus
 	
  
 TableSinSens	!byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-TBUFFER 		!fill 168,00	
+TBUFFER 		!fill 168,00	; didn't use dynamic data here because need to be initialized with "0" and compression will do the job!
 ; =============================================================================
 THB     		!byte 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
         		!byte 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
@@ -2832,15 +2856,6 @@ TableByteStar
 		!byte $01,$02,$04,$08,$10,$20,$40
 		!byte $01,$02,$04,$08,$10,$20,$40
 		!byte $01,$02,$04,$08
-		
-; =============================================================================
-; data saved for each star (dynamic data)
-TSaveYLo		= $2000
-TSaveYHi		= $2010
-TAbscisse		= $2020
-TOrdonne		= $2030
-TAddABS		= $2040
-TAddORD		= $2050
 ; =============================================================================
 EFFECT2		; display PIC
 YPIC = 75
