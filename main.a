@@ -1,6 +1,7 @@
 ; ACME 0.96.4
 ; 
 ; OLDSKOOL FORT ET VERT
+; INTRO 8KB
 ; SHADOW PARTY 2021 VERSION
 ;
 ; CODE: GROUiK / [FRENCH TOUCH]
@@ -8,6 +9,7 @@
 ; GFX: GROUiK
 ;
 ; 05/2021
+; v0.07 - size opt (dynamically generated code + tables for some parts)
 ; v0.06 - new pattern for alt bars 
 ; v0.05 - minor updates + size opt (fill "!align holes")
 ; v0.04 - new color pattern for bars (EFFECT3B added)
@@ -103,7 +105,8 @@ iREGD       	= $97
 
 bMark		= $98
 
-; ZP for effects parts 
+; ZP for effects parts
+temp2		= $FF 	; same 
 row		= $FF
 L0		= $FE
 L1		= $FD
@@ -143,6 +146,116 @@ DECOMP_ADD
 ; =================================================================================================
 MAIN
 !zone  
+		; GEN Starfield Tables
+		LDX #$00
+		LDA #01
+-		STA TableByteStar,X
+		ASL
+		BPL +
+		LDA #01
++		INX
+		BNE -
+
+		; LDX #00
+.modt		LDA #00
+		LDY #07
+-		STA TableABS,X
+		INX
+		BEQ +
+		DEY
+		BNE -
+		INC .modt+1
+		BNE .modt				; always
++
+
+		; GEN THB / THH tables (for PAGE2)
+		; LDX #00		
+-		TXA 
+		AND #$C0
+		STA temp
+		LSR 
+		LSR 
+		ORA temp
+		STA temp
+		TXA 
+		STA temp2
+		ASL 
+		ASL 
+		ASL 
+		ROL temp2
+		ASL 
+		ROL temp2
+		ASL 
+		ROR temp
+		LDA temp
+		STA THB,X
+		LDA temp2
+		AND #$1F
+		ORA #$40
+		STA THH,X
+         
+		INX
+		CPX #192
+		BNE -
+		
+
+		; GEN unrolled CODE for Scrolling Part 
+		LDY #179
+---		LDA #39
+		STA temp
+		
+		; x = 39
+		LDA #$EA			; NOP : LDA #$AC
+		STA TPatternCode
+		LDA #$A9
+		STA TPatternCode+1
+		LDA #$AC
+		STA TPatternCode+2
+		JMP .next
+		
+--		; x !=39
+		LDA #$BD			; LDA TBITS,X
+		STA TPatternCode
+		LDA #<TBITS
+		STA TPatternCode+1
+		LDA #>TBITS
+		STA TPatternCode+2
+.next
+		LDA THB,Y
+		CLC
+		ADC temp
+		; complete pattern
+		STA TPatternCode+4
+		STA TPatternCode+10
+		LDA THH,Y
+		STA TPatternCode+5
+		STA TPatternCode+11
+		
+.copy		; copy pattern
+		LDX #11
+-		
+		LDA TPatternCode,X
+.mod_dest		STA SCROLLTEXTCODE,X
+		DEX
+		BPL -
+		LDA .mod_dest+1
+		CLC
+		ADC #12
+		STA .mod_dest+1
+		BCC +
+		INC .mod_dest+2
++		; ------------
+		DEC temp
+		BPL --
+		INY
+		INY
+		CPY #191
+		BNE ---
+		LDA #$60			; RTS
+		STA SCROLLTEXTCODE+$B40
+
+		; GEN
+		
 		; CPU detection
 		; $80 = DOP/BRA
             	!byte $80,$03   		; "BRA +3" if 65C02 or "DOP" if 6502
@@ -255,10 +368,8 @@ Init_INT    	; init interrupt
 
             	LDA #%11000000      	; Enable Timer 1 (only)
             	STA $C40E           	; Interrupt Enable Register 
-
 ; =================================================================================================
-!align 255,00       ; align here to avoid syncloop crossing page 
-            	; PRECISE VBL detection - PAL/NTSC
+!align 255,0
 SYNC
 -           	LDA VERTBLANK         
             	BMI -                       	; wait fin display courant                                            
@@ -306,7 +417,7 @@ SYNC
             	STX $C404                   	; T1C_1-Lower                       	; 4
             	STY $C405                   	; T1C_1-High                        	; 4 (counter launched at the last cycle of STY)
                     	                    ; -> writing T1C_H launch countdown     ; = [14]
-
+deb1
 		CLI
 
 		; init SCREEN
@@ -524,6 +635,7 @@ Loop12		LDA bMark
 .end		JMP .end
 TEXTFT		!TEXT	"FRENCH  TOUCH"
 ; =================================================================================================
+!align 255,0
 INT_ROUT    
 !zone
 		; 2<->9 cycles (according to opcode when INT occured)
@@ -1149,7 +1261,9 @@ D_REGA = $7BD6
 D_REGB = $7DC8
 D_REGD = $7F4E
 ; =================================================================================================
-; storyboard timings
+; pattern for generated code
+TPatternCode 	!byte $BD,<TBITS,>TBITS,$AE,$FF,$FF,$1D,<TDECALL,>TDECALL,$8D,$FF,$FF
+; timings for storyboard
 TLFrames		!byte <256, <512, <768,<1152,<1280,<1408,<1536,<1664,<2048,<2304,<2560,<2816,<FRAMEMAX
 THFrames		!byte >256, >512, >768,>1152,>1280,>1408,>1536,>1664,>2048,>2304,>2560,>2816,>FRAMEMAX
 ; -----------------------------------------------------------------------------
@@ -1499,968 +1613,7 @@ mod_letter	LDX ScrollText-1
 		STA modline5+1
 ; -------------------------------------------------------------------------------------------------
 ; SCROLL PART III - scroll text
-
-modline0		LDA #$AC
-          	LDX $4f77
-          	ORA TDECALL,X
-          	STA $4f77
-          	LDA TBITS,X
-          	LDX $4f76
-          	ORA TDECALL,X
-          	STA $4f76
-          	LDA TBITS,X
-          	LDX $4f75
-          	ORA TDECALL,X
-          	STA $4f75
-          	LDA TBITS,X
-          	LDX $4f74
-          	ORA TDECALL,X
-          	STA $4f74
-          	LDA TBITS,X
-          	LDX $4f73
-          	ORA TDECALL,X
-          	STA $4f73
-          	LDA TBITS,X
-          	LDX $4f72
-          	ORA TDECALL,X
-          	STA $4f72
-          	LDA TBITS,X
-          	LDX $4f71
-          	ORA TDECALL,X
-          	STA $4f71
-          	LDA TBITS,X
-          	LDX $4f70
-          	ORA TDECALL,X
-          	STA $4f70
-          	LDA TBITS,X
-          	LDX $4f6f
-          	ORA TDECALL,X
-          	STA $4f6f
-          	LDA TBITS,X
-          	LDX $4f6e
-          	ORA TDECALL,X
-          	STA $4f6e
-          	LDA TBITS,X
-          	LDX $4f6d
-          	ORA TDECALL,X
-          	STA $4f6d
-          	LDA TBITS,X
-          	LDX $4f6c
-          	ORA TDECALL,X
-          	STA $4f6c
-          	LDA TBITS,X
-          	LDX $4f6b
-          	ORA TDECALL,X
-          	STA $4f6b
-          	LDA TBITS,X
-          	LDX $4f6a
-          	ORA TDECALL,X
-          	STA $4f6a
-          	LDA TBITS,X
-          	LDX $4f69
-          	ORA TDECALL,X
-          	STA $4f69
-          	LDA TBITS,X
-          	LDX $4f68
-          	ORA TDECALL,X
-          	STA $4f68
-          	LDA TBITS,X
-          	LDX $4f67
-          	ORA TDECALL,X
-          	STA $4f67
-          	LDA TBITS,X
-          	LDX $4f66
-          	ORA TDECALL,X
-          	STA $4f66
-          	LDA TBITS,X
-          	LDX $4f65
-          	ORA TDECALL,X
-          	STA $4f65
-          	LDA TBITS,X
-          	LDX $4f64
-          	ORA TDECALL,X
-          	STA $4f64
-          	LDA TBITS,X
-          	LDX $4f63
-          	ORA TDECALL,X
-          	STA $4f63
-          	LDA TBITS,X
-          	LDX $4f62
-          	ORA TDECALL,X
-          	STA $4f62
-          	LDA TBITS,X
-          	LDX $4f61
-          	ORA TDECALL,X
-          	STA $4f61
-          	LDA TBITS,X
-          	LDX $4f60
-          	ORA TDECALL,X
-          	STA $4f60
-          	LDA TBITS,X
-          	LDX $4f5f
-          	ORA TDECALL,X
-          	STA $4f5f
-          	LDA TBITS,X
-          	LDX $4f5e
-          	ORA TDECALL,X
-          	STA $4f5e
-          	LDA TBITS,X
-          	LDX $4f5d
-          	ORA TDECALL,X
-          	STA $4f5d
-          	LDA TBITS,X
-          	LDX $4f5c
-          	ORA TDECALL,X
-          	STA $4f5c
-          	LDA TBITS,X
-          	LDX $4f5b
-          	ORA TDECALL,X
-          	STA $4f5b
-          	LDA TBITS,X
-          	LDX $4f5a
-          	ORA TDECALL,X
-          	STA $4f5a
-          	LDA TBITS,X
-          	LDX $4f59
-          	ORA TDECALL,X
-          	STA $4f59
-          	LDA TBITS,X
-          	LDX $4f58
-          	ORA TDECALL,X
-          	STA $4f58
-          	LDA TBITS,X
-          	LDX $4f57
-          	ORA TDECALL,X
-          	STA $4f57
-          	LDA TBITS,X
-          	LDX $4f56
-          	ORA TDECALL,X
-          	STA $4f56
-          	LDA TBITS,X
-          	LDX $4f55
-          	ORA TDECALL,X
-          	STA $4f55
-          	LDA TBITS,X
-          	LDX $4f54
-          	ORA TDECALL,X
-          	STA $4f54
-          	LDA TBITS,X
-          	LDX $4f53
-          	ORA TDECALL,X
-          	STA $4f53
-          	LDA TBITS,X
-          	LDX $4f52
-          	ORA TDECALL,X
-          	STA $4f52
-          	LDA TBITS,X
-          	LDX $4f51
-          	ORA TDECALL,X
-          	STA $4f51
-          	LDA TBITS,X
-          	LDX $4f50
-          	ORA TDECALL,X
-          	STA $4f50	
-modline1        	LDA #$AC
-          	LDX $5777
-          	ORA TDECALL,X
-          	STA $5777
-          	LDA TBITS,X
-          	LDX $5776
-          	ORA TDECALL,X
-          	STA $5776
-          	LDA TBITS,X
-          	LDX $5775
-          	ORA TDECALL,X
-          	STA $5775
-          	LDA TBITS,X
-          	LDX $5774
-          	ORA TDECALL,X
-          	STA $5774
-          	LDA TBITS,X
-          	LDX $5773
-          	ORA TDECALL,X
-          	STA $5773
-          	LDA TBITS,X
-          	LDX $5772
-          	ORA TDECALL,X
-          	STA $5772
-          	LDA TBITS,X
-          	LDX $5771
-          	ORA TDECALL,X
-          	STA $5771
-          	LDA TBITS,X
-          	LDX $5770
-          	ORA TDECALL,X
-          	STA $5770
-          	LDA TBITS,X
-          	LDX $576f
-          	ORA TDECALL,X
-          	STA $576f
-          	LDA TBITS,X
-          	LDX $576e
-          	ORA TDECALL,X
-          	STA $576e
-          	LDA TBITS,X
-          	LDX $576d
-          	ORA TDECALL,X
-          	STA $576d
-          	LDA TBITS,X
-          	LDX $576c
-          	ORA TDECALL,X
-          	STA $576c
-          	LDA TBITS,X
-          	LDX $576b
-          	ORA TDECALL,X
-          	STA $576b
-          	LDA TBITS,X
-          	LDX $576a
-          	ORA TDECALL,X
-          	STA $576a
-          	LDA TBITS,X
-          	LDX $5769
-          	ORA TDECALL,X
-          	STA $5769
-          	LDA TBITS,X
-          	LDX $5768
-          	ORA TDECALL,X
-          	STA $5768
-          	LDA TBITS,X
-          	LDX $5767
-          	ORA TDECALL,X
-          	STA $5767
-          	LDA TBITS,X
-          	LDX $5766
-          	ORA TDECALL,X
-          	STA $5766
-          	LDA TBITS,X
-          	LDX $5765
-          	ORA TDECALL,X
-          	STA $5765
-          	LDA TBITS,X
-          	LDX $5764
-          	ORA TDECALL,X
-          	STA $5764
-          	LDA TBITS,X
-          	LDX $5763
-          	ORA TDECALL,X
-          	STA $5763
-          	LDA TBITS,X
-          	LDX $5762
-          	ORA TDECALL,X
-          	STA $5762
-          	LDA TBITS,X
-          	LDX $5761
-          	ORA TDECALL,X
-          	STA $5761
-          	LDA TBITS,X
-          	LDX $5760
-          	ORA TDECALL,X
-          	STA $5760
-          	LDA TBITS,X
-          	LDX $575f
-          	ORA TDECALL,X
-          	STA $575f
-          	LDA TBITS,X
-          	LDX $575e
-          	ORA TDECALL,X
-          	STA $575e
-          	LDA TBITS,X
-          	LDX $575d
-          	ORA TDECALL,X
-          	STA $575d
-          	LDA TBITS,X
-          	LDX $575c
-          	ORA TDECALL,X
-          	STA $575c
-          	LDA TBITS,X
-          	LDX $575b
-          	ORA TDECALL,X
-          	STA $575b
-          	LDA TBITS,X
-          	LDX $575a
-          	ORA TDECALL,X
-          	STA $575a
-          	LDA TBITS,X
-          	LDX $5759
-          	ORA TDECALL,X
-          	STA $5759
-          	LDA TBITS,X
-          	LDX $5758
-          	ORA TDECALL,X
-          	STA $5758
-          	LDA TBITS,X
-          	LDX $5757
-          	ORA TDECALL,X
-          	STA $5757
-          	LDA TBITS,X
-          	LDX $5756
-          	ORA TDECALL,X
-          	STA $5756
-          	LDA TBITS,X
-          	LDX $5755
-          	ORA TDECALL,X
-          	STA $5755
-          	LDA TBITS,X
-          	LDX $5754
-          	ORA TDECALL,X
-          	STA $5754
-          	LDA TBITS,X
-          	LDX $5753
-          	ORA TDECALL,X
-          	STA $5753
-          	LDA TBITS,X
-          	LDX $5752
-          	ORA TDECALL,X
-          	STA $5752
-          	LDA TBITS,X
-          	LDX $5751
-          	ORA TDECALL,X
-          	STA $5751
-          	LDA TBITS,X
-          	LDX $5750
-          	ORA TDECALL,X
-          	STA $5750	
-modline2        	LDA #$AC
-          	LDX $5f77
-          	ORA TDECALL,X
-          	STA $5f77
-          	LDA TBITS,X
-          	LDX $5f76
-          	ORA TDECALL,X
-          	STA $5f76
-          	LDA TBITS,X
-          	LDX $5f75
-          	ORA TDECALL,X
-          	STA $5f75
-          	LDA TBITS,X
-          	LDX $5f74
-          	ORA TDECALL,X
-          	STA $5f74
-          	LDA TBITS,X
-          	LDX $5f73
-          	ORA TDECALL,X
-          	STA $5f73
-          	LDA TBITS,X
-          	LDX $5f72
-          	ORA TDECALL,X
-          	STA $5f72
-          	LDA TBITS,X
-          	LDX $5f71
-          	ORA TDECALL,X
-          	STA $5f71
-          	LDA TBITS,X
-          	LDX $5f70
-          	ORA TDECALL,X
-          	STA $5f70
-          	LDA TBITS,X
-          	LDX $5f6f
-          	ORA TDECALL,X
-          	STA $5f6f
-          	LDA TBITS,X
-          	LDX $5f6e
-          	ORA TDECALL,X
-          	STA $5f6e
-          	LDA TBITS,X
-          	LDX $5f6d
-          	ORA TDECALL,X
-          	STA $5f6d
-          	LDA TBITS,X
-          	LDX $5f6c
-          	ORA TDECALL,X
-          	STA $5f6c
-          	LDA TBITS,X
-          	LDX $5f6b
-          	ORA TDECALL,X
-          	STA $5f6b
-          	LDA TBITS,X
-          	LDX $5f6a
-          	ORA TDECALL,X
-          	STA $5f6a
-          	LDA TBITS,X
-          	LDX $5f69
-          	ORA TDECALL,X
-          	STA $5f69
-          	LDA TBITS,X
-          	LDX $5f68
-          	ORA TDECALL,X
-          	STA $5f68
-          	LDA TBITS,X
-          	LDX $5f67
-          	ORA TDECALL,X
-          	STA $5f67
-          	LDA TBITS,X
-          	LDX $5f66
-          	ORA TDECALL,X
-          	STA $5f66
-          	LDA TBITS,X
-          	LDX $5f65
-          	ORA TDECALL,X
-          	STA $5f65
-          	LDA TBITS,X
-          	LDX $5f64
-          	ORA TDECALL,X
-          	STA $5f64
-          	LDA TBITS,X
-          	LDX $5f63
-          	ORA TDECALL,X
-          	STA $5f63
-          	LDA TBITS,X
-          	LDX $5f62
-          	ORA TDECALL,X
-          	STA $5f62
-          	LDA TBITS,X
-          	LDX $5f61
-          	ORA TDECALL,X
-          	STA $5f61
-          	LDA TBITS,X
-          	LDX $5f60
-          	ORA TDECALL,X
-          	STA $5f60
-          	LDA TBITS,X
-          	LDX $5f5f
-          	ORA TDECALL,X
-          	STA $5f5f
-          	LDA TBITS,X
-          	LDX $5f5e
-          	ORA TDECALL,X
-          	STA $5f5e
-          	LDA TBITS,X
-          	LDX $5f5d
-          	ORA TDECALL,X
-          	STA $5f5d
-          	LDA TBITS,X
-          	LDX $5f5c
-          	ORA TDECALL,X
-          	STA $5f5c
-          	LDA TBITS,X
-          	LDX $5f5b
-          	ORA TDECALL,X
-          	STA $5f5b
-          	LDA TBITS,X
-          	LDX $5f5a
-          	ORA TDECALL,X
-          	STA $5f5a
-          	LDA TBITS,X
-          	LDX $5f59
-          	ORA TDECALL,X
-          	STA $5f59
-          	LDA TBITS,X
-          	LDX $5f58
-          	ORA TDECALL,X
-          	STA $5f58
-          	LDA TBITS,X
-          	LDX $5f57
-          	ORA TDECALL,X
-          	STA $5f57
-          	LDA TBITS,X
-          	LDX $5f56
-          	ORA TDECALL,X
-          	STA $5f56
-          	LDA TBITS,X
-          	LDX $5f55
-          	ORA TDECALL,X
-          	STA $5f55
-          	LDA TBITS,X
-          	LDX $5f54
-          	ORA TDECALL,X
-          	STA $5f54
-          	LDA TBITS,X
-          	LDX $5f53
-          	ORA TDECALL,X
-          	STA $5f53
-          	LDA TBITS,X
-          	LDX $5f52
-          	ORA TDECALL,X
-          	STA $5f52
-          	LDA TBITS,X
-          	LDX $5f51
-          	ORA TDECALL,X
-          	STA $5f51
-          	LDA TBITS,X
-          	LDX $5f50
-          	ORA TDECALL,X
-          	STA $5f50	
-modline3        	LDA #$AC
-          	LDX $47f7
-          	ORA TDECALL,X
-          	STA $47f7
-          	LDA TBITS,X
-          	LDX $47f6
-          	ORA TDECALL,X
-          	STA $47f6
-          	LDA TBITS,X
-          	LDX $47f5
-          	ORA TDECALL,X
-          	STA $47f5
-          	LDA TBITS,X
-          	LDX $47f4
-          	ORA TDECALL,X
-          	STA $47f4
-          	LDA TBITS,X
-          	LDX $47f3
-          	ORA TDECALL,X
-          	STA $47f3
-          	LDA TBITS,X
-          	LDX $47f2
-          	ORA TDECALL,X
-          	STA $47f2
-          	LDA TBITS,X
-          	LDX $47f1
-          	ORA TDECALL,X
-          	STA $47f1
-          	LDA TBITS,X
-          	LDX $47f0
-          	ORA TDECALL,X
-          	STA $47f0
-          	LDA TBITS,X
-          	LDX $47ef
-          	ORA TDECALL,X
-          	STA $47ef
-          	LDA TBITS,X
-          	LDX $47ee
-          	ORA TDECALL,X
-          	STA $47ee
-          	LDA TBITS,X
-          	LDX $47ed
-          	ORA TDECALL,X
-          	STA $47ed
-          	LDA TBITS,X
-          	LDX $47ec
-          	ORA TDECALL,X
-          	STA $47ec
-          	LDA TBITS,X
-          	LDX $47eb
-          	ORA TDECALL,X
-          	STA $47eb
-          	LDA TBITS,X
-          	LDX $47ea
-          	ORA TDECALL,X
-          	STA $47ea
-          	LDA TBITS,X
-          	LDX $47e9
-          	ORA TDECALL,X
-          	STA $47e9
-          	LDA TBITS,X
-          	LDX $47e8
-          	ORA TDECALL,X
-          	STA $47e8
-          	LDA TBITS,X
-          	LDX $47e7
-          	ORA TDECALL,X
-          	STA $47e7
-          	LDA TBITS,X
-          	LDX $47e6
-          	ORA TDECALL,X
-          	STA $47e6
-          	LDA TBITS,X
-          	LDX $47e5
-          	ORA TDECALL,X
-          	STA $47e5
-          	LDA TBITS,X
-          	LDX $47e4
-          	ORA TDECALL,X
-          	STA $47e4
-          	LDA TBITS,X
-          	LDX $47e3
-          	ORA TDECALL,X
-          	STA $47e3
-          	LDA TBITS,X
-          	LDX $47e2
-          	ORA TDECALL,X
-          	STA $47e2
-          	LDA TBITS,X
-          	LDX $47e1
-          	ORA TDECALL,X
-          	STA $47e1
-          	LDA TBITS,X
-          	LDX $47e0
-          	ORA TDECALL,X
-          	STA $47e0
-          	LDA TBITS,X
-          	LDX $47df
-          	ORA TDECALL,X
-          	STA $47df
-          	LDA TBITS,X
-          	LDX $47de
-          	ORA TDECALL,X
-          	STA $47de
-          	LDA TBITS,X
-          	LDX $47dd
-          	ORA TDECALL,X
-          	STA $47dd
-          	LDA TBITS,X
-          	LDX $47dc
-          	ORA TDECALL,X
-          	STA $47dc
-          	LDA TBITS,X
-          	LDX $47db
-          	ORA TDECALL,X
-          	STA $47db
-          	LDA TBITS,X
-          	LDX $47da
-          	ORA TDECALL,X
-          	STA $47da
-          	LDA TBITS,X
-          	LDX $47d9
-          	ORA TDECALL,X
-          	STA $47d9
-          	LDA TBITS,X
-          	LDX $47d8
-          	ORA TDECALL,X
-          	STA $47d8
-          	LDA TBITS,X
-          	LDX $47d7
-          	ORA TDECALL,X
-          	STA $47d7
-          	LDA TBITS,X
-          	LDX $47d6
-          	ORA TDECALL,X
-          	STA $47d6
-          	LDA TBITS,X
-          	LDX $47d5
-          	ORA TDECALL,X
-          	STA $47d5
-          	LDA TBITS,X
-          	LDX $47d4
-          	ORA TDECALL,X
-          	STA $47d4
-          	LDA TBITS,X
-          	LDX $47d3
-          	ORA TDECALL,X
-          	STA $47d3
-          	LDA TBITS,X
-          	LDX $47d2
-          	ORA TDECALL,X
-          	STA $47d2
-          	LDA TBITS,X
-          	LDX $47d1
-          	ORA TDECALL,X
-          	STA $47d1
-          	LDA TBITS,X
-          	LDX $47d0
-          	ORA TDECALL,X
-          	STA $47d0	
-modline4        	LDA #$AC
-          	LDX $4ff7
-          	ORA TDECALL,X
-          	STA $4ff7
-          	LDA TBITS,X
-          	LDX $4ff6
-          	ORA TDECALL,X
-          	STA $4ff6
-          	LDA TBITS,X
-          	LDX $4ff5
-          	ORA TDECALL,X
-          	STA $4ff5
-          	LDA TBITS,X
-          	LDX $4ff4
-          	ORA TDECALL,X
-          	STA $4ff4
-          	LDA TBITS,X
-          	LDX $4ff3
-          	ORA TDECALL,X
-          	STA $4ff3
-          	LDA TBITS,X
-          	LDX $4ff2
-          	ORA TDECALL,X
-          	STA $4ff2
-          	LDA TBITS,X
-          	LDX $4ff1
-          	ORA TDECALL,X
-          	STA $4ff1
-          	LDA TBITS,X
-          	LDX $4ff0
-          	ORA TDECALL,X
-          	STA $4ff0
-          	LDA TBITS,X
-          	LDX $4fef
-          	ORA TDECALL,X
-          	STA $4fef
-          	LDA TBITS,X
-          	LDX $4fee
-          	ORA TDECALL,X
-          	STA $4fee
-          	LDA TBITS,X
-          	LDX $4fed
-          	ORA TDECALL,X
-          	STA $4fed
-          	LDA TBITS,X
-          	LDX $4fec
-          	ORA TDECALL,X
-          	STA $4fec
-          	LDA TBITS,X
-          	LDX $4feb
-          	ORA TDECALL,X
-          	STA $4feb
-          	LDA TBITS,X
-          	LDX $4fea
-          	ORA TDECALL,X
-          	STA $4fea
-          	LDA TBITS,X
-          	LDX $4fe9
-          	ORA TDECALL,X
-          	STA $4fe9
-          	LDA TBITS,X
-          	LDX $4fe8
-          	ORA TDECALL,X
-          	STA $4fe8
-          	LDA TBITS,X
-          	LDX $4fe7
-          	ORA TDECALL,X
-          	STA $4fe7
-          	LDA TBITS,X
-          	LDX $4fe6
-          	ORA TDECALL,X
-          	STA $4fe6
-          	LDA TBITS,X
-          	LDX $4fe5
-          	ORA TDECALL,X
-          	STA $4fe5
-          	LDA TBITS,X
-          	LDX $4fe4
-          	ORA TDECALL,X
-          	STA $4fe4
-          	LDA TBITS,X
-          	LDX $4fe3
-          	ORA TDECALL,X
-          	STA $4fe3
-          	LDA TBITS,X
-          	LDX $4fe2
-          	ORA TDECALL,X
-          	STA $4fe2
-          	LDA TBITS,X
-          	LDX $4fe1
-          	ORA TDECALL,X
-          	STA $4fe1
-          	LDA TBITS,X
-          	LDX $4fe0
-          	ORA TDECALL,X
-          	STA $4fe0
-          	LDA TBITS,X
-          	LDX $4fdf
-          	ORA TDECALL,X
-          	STA $4fdf
-          	LDA TBITS,X
-          	LDX $4fde
-          	ORA TDECALL,X
-          	STA $4fde
-          	LDA TBITS,X
-          	LDX $4fdd
-          	ORA TDECALL,X
-          	STA $4fdd
-          	LDA TBITS,X
-          	LDX $4fdc
-          	ORA TDECALL,X
-          	STA $4fdc
-          	LDA TBITS,X
-          	LDX $4fdb
-          	ORA TDECALL,X
-          	STA $4fdb
-          	LDA TBITS,X
-          	LDX $4fda
-          	ORA TDECALL,X
-          	STA $4fda
-          	LDA TBITS,X
-          	LDX $4fd9
-          	ORA TDECALL,X
-          	STA $4fd9
-          	LDA TBITS,X
-          	LDX $4fd8
-          	ORA TDECALL,X
-          	STA $4fd8
-          	LDA TBITS,X
-          	LDX $4fd7
-          	ORA TDECALL,X
-          	STA $4fd7
-          	LDA TBITS,X
-          	LDX $4fd6
-          	ORA TDECALL,X
-          	STA $4fd6
-          	LDA TBITS,X
-          	LDX $4fd5
-          	ORA TDECALL,X
-          	STA $4fd5
-          	LDA TBITS,X
-          	LDX $4fd4
-          	ORA TDECALL,X
-          	STA $4fd4
-          	LDA TBITS,X
-          	LDX $4fd3
-          	ORA TDECALL,X
-          	STA $4fd3
-          	LDA TBITS,X
-          	LDX $4fd2
-          	ORA TDECALL,X
-          	STA $4fd2
-          	LDA TBITS,X
-          	LDX $4fd1
-          	ORA TDECALL,X
-          	STA $4fd1
-          	LDA TBITS,X
-          	LDX $4fd0
-          	ORA TDECALL,X
-          	STA $4fd0	
-modline5        	LDA #$AC
-          	LDX $57f7
-          	ORA TDECALL,X
-          	STA $57f7
-          	LDA TBITS,X
-          	LDX $57f6
-          	ORA TDECALL,X
-          	STA $57f6
-          	LDA TBITS,X
-          	LDX $57f5
-          	ORA TDECALL,X
-          	STA $57f5
-          	LDA TBITS,X
-          	LDX $57f4
-          	ORA TDECALL,X
-          	STA $57f4
-          	LDA TBITS,X
-          	LDX $57f3
-          	ORA TDECALL,X
-          	STA $57f3
-          	LDA TBITS,X
-          	LDX $57f2
-          	ORA TDECALL,X
-          	STA $57f2
-          	LDA TBITS,X
-          	LDX $57f1
-          	ORA TDECALL,X
-          	STA $57f1
-          	LDA TBITS,X
-          	LDX $57f0
-          	ORA TDECALL,X
-          	STA $57f0
-          	LDA TBITS,X
-          	LDX $57ef
-          	ORA TDECALL,X
-          	STA $57ef
-          	LDA TBITS,X
-          	LDX $57ee
-          	ORA TDECALL,X
-          	STA $57ee
-          	LDA TBITS,X
-          	LDX $57ed
-          	ORA TDECALL,X
-          	STA $57ed
-          	LDA TBITS,X
-          	LDX $57ec
-          	ORA TDECALL,X
-          	STA $57ec
-          	LDA TBITS,X
-          	LDX $57eb
-          	ORA TDECALL,X
-          	STA $57eb
-          	LDA TBITS,X
-          	LDX $57ea
-          	ORA TDECALL,X
-          	STA $57ea
-          	LDA TBITS,X
-          	LDX $57e9
-          	ORA TDECALL,X
-          	STA $57e9
-          	LDA TBITS,X
-          	LDX $57e8
-          	ORA TDECALL,X
-          	STA $57e8
-          	LDA TBITS,X
-          	LDX $57e7
-          	ORA TDECALL,X
-          	STA $57e7
-          	LDA TBITS,X
-          	LDX $57e6
-          	ORA TDECALL,X
-          	STA $57e6
-          	LDA TBITS,X
-          	LDX $57e5
-          	ORA TDECALL,X
-          	STA $57e5
-          	LDA TBITS,X
-          	LDX $57e4
-          	ORA TDECALL,X
-          	STA $57e4
-          	LDA TBITS,X
-          	LDX $57e3
-          	ORA TDECALL,X
-          	STA $57e3
-          	LDA TBITS,X
-          	LDX $57e2
-          	ORA TDECALL,X
-          	STA $57e2
-          	LDA TBITS,X
-          	LDX $57e1
-          	ORA TDECALL,X
-          	STA $57e1
-          	LDA TBITS,X
-          	LDX $57e0
-          	ORA TDECALL,X
-          	STA $57e0
-          	LDA TBITS,X
-          	LDX $57df
-          	ORA TDECALL,X
-          	STA $57df
-          	LDA TBITS,X
-          	LDX $57de
-          	ORA TDECALL,X
-          	STA $57de
-          	LDA TBITS,X
-          	LDX $57dd
-          	ORA TDECALL,X
-          	STA $57dd
-          	LDA TBITS,X
-          	LDX $57dc
-          	ORA TDECALL,X
-          	STA $57dc
-          	LDA TBITS,X
-          	LDX $57db
-          	ORA TDECALL,X
-          	STA $57db
-          	LDA TBITS,X
-          	LDX $57da
-          	ORA TDECALL,X
-          	STA $57da
-          	LDA TBITS,X
-          	LDX $57d9
-          	ORA TDECALL,X
-          	STA $57d9
-          	LDA TBITS,X
-          	LDX $57d8
-          	ORA TDECALL,X
-          	STA $57d8
-          	LDA TBITS,X
-          	LDX $57d7
-          	ORA TDECALL,X
-          	STA $57d7
-          	LDA TBITS,X
-          	LDX $57d6
-          	ORA TDECALL,X
-          	STA $57d6
-          	LDA TBITS,X
-          	LDX $57d5
-          	ORA TDECALL,X
-          	STA $57d5
-          	LDA TBITS,X
-          	LDX $57d4
-          	ORA TDECALL,X
-          	STA $57d4
-          	LDA TBITS,X
-          	LDX $57d3
-          	ORA TDECALL,X
-          	STA $57d3
-          	LDA TBITS,X
-          	LDX $57d2
-          	ORA TDECALL,X
-          	STA $57d2
-          	LDA TBITS,X
-          	LDX $57d1
-          	ORA TDECALL,X
-          	STA $57d1
-          	LDA TBITS,X
-          	LDX $57d0
-          	ORA TDECALL,X
-          	STA $57d0	
-		RTS
+		JMP SCROLLTEXTCODE
 ; =================================================================================================
 !convtab "specialtxt.bin" {
 ScrollText
@@ -2472,6 +1625,7 @@ TLINE1 		!byte 0, 9, 9, 1, 9, 1, 1, 1, 9, 1, 4, 9, 1, 31, 19, 9, 9, 9, 9, 1, 4, 
 TLINE2 		!byte 0, 9, 9, 1, 9, 1, 1, 1, 9, 1, 4, 5, 1, 21, 23, 9, 9, 9, 9, 1, 4, 9, 9, 21, 9, 9, 4, 0, 0, 1, 1, 1, 2, 44, 5, 2, 4, 10, 5, 8, 20
 
 ; =================================================================================================
+!align 255,0
 full_hgr		; 34 CYCLES 
 !zone
 		STA $C057				; 4
@@ -2621,14 +1775,27 @@ L_STARS
 		STA TDeplacement,X
 		STA TNewStar,X
 		JMP .DISPLAYSTAR
-; --------------------------------------------------------	
+; =============================================================================
+; addresses for dynamic data
+THB     		= $2000
+THH     		= $2100	
 ; data saved for each star (dynamic data)
-TSaveYLo		= $2000
-TSaveYHi		= $2010
-TAbscisse		= $2020
-TOrdonne		= $2030
-TAddABS		= $2040
-TAddORD		= $2050
+TSaveYLo		= $2300
+TSaveYHi		= $2310
+TAbscisse		= $2320
+TOrdonne		= $2330
+TAddABS		= $2340
+TAddORD		= $2350
+TableABS		= $2400
+TableByteStar	= $2500
+
+SCROLLTEXTCODE 	= $3000
+modline0	     	= SCROLLTEXTCODE+1				
+modline1		= SCROLLTEXTCODE+ $1E1
+modline2		= SCROLLTEXTCODE+ $3C1
+modline3		= SCROLLTEXTCODE+ $5A1
+modline4		= SCROLLTEXTCODE+ $781
+modline5		= SCROLLTEXTCODE+ $961
 ; =============================================================================
 EFFECT3		; change GR Colors	(alt)
 !zone
@@ -2705,6 +1872,8 @@ EFFECT3B		; change GR Colors (default)
 		DEX
 		BPL -
 		RTS
+
+TBUFFER 		!fill 168,00	; didn't use dynamic data here because need to be initialized with "0" and compression will do the job!
 ; =============================================================================
 !align 255,0	
 TableSinus
@@ -2727,135 +1896,10 @@ TableSinus
 	
  
 TableSinSens	!byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-TBUFFER 		!fill 168,00	; didn't use dynamic data here because need to be initialized with "0" and compression will do the job!
-; =============================================================================
-THB     		!byte 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-        		!byte 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
-        		!byte 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-        		!byte 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
-        		!byte 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-        		!byte 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
-        		!byte 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-        		!byte 0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80
-        		!byte 0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28
-        		!byte 0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8
-        		!byte 0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28
-        		!byte 0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8
-        		!byte 0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28
-        		!byte 0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8
-        		!byte 0x28,0x28,0x28,0x28,0x28,0x28,0x28,0x28
-        		!byte 0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8,0xA8
-        		!byte 0x50,0x50,0x50,0x50,0x50,0x50,0x50,0x50
-        		!byte 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0
-        		!byte 0x50,0x50,0x50,0x50,0x50,0x50,0x50,0x50
-        		!byte 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0
-        		!byte 0x50,0x50,0x50,0x50,0x50,0x50,0x50,0x50
-        		!byte 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0
-        		!byte 0x50,0x50,0x50,0x50,0x50,0x50,0x50,0x50
-        		!byte 0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0,0xD0
-
-THH     		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
-        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
-        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
-        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
-        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
-        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
-        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
-        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
-        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
-        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
-        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
-        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
-        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
-        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
-        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
-        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
-        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
-        		!byte 0x40,0x44,0x48,0x4C,0x50,0x54,0x58,0x5C
-        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
-        		!byte 0x41,0x45,0x49,0x4D,0x51,0x55,0x59,0x5D
-        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
-        		!byte 0x42,0x46,0x4A,0x4E,0x52,0x56,0x5A,0x5E
-        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
-        		!byte 0x43,0x47,0x4B,0x4F,0x53,0x57,0x5B,0x5F
-
-TableABS
-		!byte $00,$00,$00,$00,$00,$00,$00
-		!byte $01,$01,$01,$01,$01,$01,$01
-		!byte $02,$02,$02,$02,$02,$02,$02
-		!byte $03,$03,$03,$03,$03,$03,$03
-		!byte $04,$04,$04,$04,$04,$04,$04
-		!byte $05,$05,$05,$05,$05,$05,$05
-		!byte $06,$06,$06,$06,$06,$06,$06
-		!byte $07,$07,$07,$07,$07,$07,$07
-		!byte $08,$08,$08,$08,$08,$08,$08
-		!byte $09,$09,$09,$09,$09,$09,$09
-		!byte $0a,$0a,$0a,$0a,$0a,$0a,$0a
-		!byte $0b,$0b,$0b,$0b,$0b,$0b,$0b
-		!byte $0c,$0c,$0c,$0c,$0c,$0c,$0c
-		!byte $0d,$0d,$0d,$0d,$0d,$0d,$0d
-		!byte $0e,$0e,$0e,$0e,$0e,$0e,$0e
-		!byte $0f,$0f,$0f,$0f,$0f,$0f,$0f
-		!byte $10,$10,$10,$10,$10,$10,$10
-		!byte $11,$11,$11,$11,$11,$11,$11
-		!byte $12,$12,$12,$12,$12,$12,$12
-		!byte $13,$13,$13,$13,$13,$13,$13
-		!byte $14,$14,$14,$14,$14,$14,$14
-		!byte $15,$15,$15,$15,$15,$15,$15
-		!byte $16,$16,$16,$16,$16,$16,$16
-		!byte $17,$17,$17,$17,$17,$17,$17
-		!byte $18,$18,$18,$18,$18,$18,$18
-		!byte $19,$19,$19,$19,$19,$19,$19
-		!byte $1a,$1a,$1a,$1a,$1a,$1a,$1a
-		!byte $1b,$1b,$1b,$1b,$1b,$1b,$1b
-		!byte $1c,$1c,$1c,$1c,$1c,$1c,$1c
-		!byte $1d,$1d,$1d,$1d,$1d,$1d,$1d
-		!byte $1e,$1e,$1e,$1e,$1e,$1e,$1e
-		!byte $1f,$1f,$1f,$1f,$1f,$1f,$1f
-		!byte $20,$20,$20,$20,$20,$20,$20
-		!byte $21,$21,$21,$21,$21,$21,$21
-		!byte $22,$22,$22,$22,$22,$22,$22
-		!byte $23,$23,$23,$23,$23,$23,$23
-		!byte $24,$24,$24,$24
-
-TableByteStar
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08,$10,$20,$40
-		!byte $01,$02,$04,$08
+; -----------------------------------------------------------------------------
+FT_PIC		!byte 124, 127, 67, 127, 15, 126, 127, 97, 3, 6, 124, 127, 112, 1, 3, 112, 127, 115, 127, 63, 120, 127, 121, 79, 31, 124, 127, 124, 103, 15, 124, 1, 112, 31, 60, 126, 0, 120, 79, 31, 63, 0, 124, 103, 15, 124, 127, 115, 127, 63, 126, 127, 121, 79, 31, 63, 0, 124, 127, 15, 124, 127, 115, 127, 15, 126, 127, 121, 127, 31, 63, 0, 124, 127, 15, 124, 1, 112, 127, 63, 126, 0, 120, 127, 31, 63, 0, 124, 103, 15, 124, 1, 112, 31, 63, 126, 127, 121, 79, 31, 127, 127, 124, 103, 15, 124, 1, 64, 7, 12, 126, 127, 97, 3, 6, 124, 127, 112, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 120, 127, 1, 127, 7, 60, 120, 64, 127, 15, 30, 60, 0, 0, 0, 126, 127, 121, 15, 30, 63, 120, 124, 7, 64, 31, 60, 0, 0, 0, 96, 15, 120, 15, 30, 63, 120, 124, 7, 64, 127, 63, 0, 0, 0, 96, 15, 120, 15, 30, 63, 120, 124, 7, 64, 127, 63, 0, 0, 0, 96, 15, 120, 15, 30, 63, 120, 124, 7, 64, 31, 60, 0, 0, 0, 96, 15, 120, 127, 31, 127, 127, 124, 127, 67, 31, 60, 0, 0, 0, 96, 15, 96, 127, 7, 127, 127, 112, 127, 79, 31, 60, 0, 0
+PRESENT_PIC	!byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 126, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 31, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 70, 127, 67, 127, 67, 127, 67, 127, 67, 127, 67, 99, 115, 127, 27, 118, 103, 115, 103, 115, 7, 112, 7, 112, 7, 112, 103, 3, 30, 24, 118, 103, 115, 127, 112, 127, 115, 127, 115, 127, 115, 127, 3, 30, 24, 118, 127, 112, 127, 112, 7, 0, 96, 115, 7, 112, 127, 3, 30, 24, 118, 7, 112, 103, 115, 127, 115, 127, 115, 127, 115, 115, 3, 30, 24, 118, 1, 112, 103, 115, 127, 112, 127, 112, 127, 112, 97, 3, 30, 24, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 126, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+OLD_PIC		!byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 124, 127, 124, 1, 127, 31, 127, 103, 127, 103, 127, 121, 63, 126, 0, 12, 96, 76, 1, 3, 24, 3, 102, 24, 102, 64, 25, 48, 102, 0, 12, 96, 76, 1, 3, 24, 3, 102, 24, 102, 64, 25, 48, 102, 0, 76, 103, 76, 1, 51, 24, 115, 103, 0, 102, 76, 25, 51, 102, 0, 76, 103, 76, 1, 115, 25, 115, 103, 0, 102, 76, 25, 51, 102, 0, 76, 103, 76, 1, 115, 25, 3, 102, 96, 103, 76, 25, 51, 102, 0, 76, 103, 76, 1, 115, 25, 3, 102, 0, 102, 76, 25, 51, 102, 0, 76, 103, 76, 1, 51, 24, 63, 102, 0, 102, 76, 25, 51, 102, 0, 12, 96, 76, 31, 3, 24, 3, 102, 24, 102, 64, 25, 48, 102, 15, 12, 96, 12, 24, 3, 24, 3, 102, 24, 102, 64, 25, 48, 6, 12, 124, 127, 124, 31, 127, 31, 127, 103, 127, 103, 127, 121, 63, 126, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 96, 24, 86, 101, 96, 48, 48, 13, 75, 97, 0, 0, 0, 0, 0, 96, 24, 86, 99, 96, 48, 112, 13, 71, 97, 0, 0, 0
 ; =============================================================================
 EFFECT2		; display PIC
 YPIC = 75
@@ -2883,10 +1927,6 @@ mod_picture
 		BNE .loop
 		STY IndexDataPic
 +		RTS
-; -----------------------------------------------------------------------------
-FT_PIC		!byte 124, 127, 67, 127, 15, 126, 127, 97, 3, 6, 124, 127, 112, 1, 3, 112, 127, 115, 127, 63, 120, 127, 121, 79, 31, 124, 127, 124, 103, 15, 124, 1, 112, 31, 60, 126, 0, 120, 79, 31, 63, 0, 124, 103, 15, 124, 127, 115, 127, 63, 126, 127, 121, 79, 31, 63, 0, 124, 127, 15, 124, 127, 115, 127, 15, 126, 127, 121, 127, 31, 63, 0, 124, 127, 15, 124, 1, 112, 127, 63, 126, 0, 120, 127, 31, 63, 0, 124, 103, 15, 124, 1, 112, 31, 63, 126, 127, 121, 79, 31, 127, 127, 124, 103, 15, 124, 1, 64, 7, 12, 126, 127, 97, 3, 6, 124, 127, 112, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 120, 127, 1, 127, 7, 60, 120, 64, 127, 15, 30, 60, 0, 0, 0, 126, 127, 121, 15, 30, 63, 120, 124, 7, 64, 31, 60, 0, 0, 0, 96, 15, 120, 15, 30, 63, 120, 124, 7, 64, 127, 63, 0, 0, 0, 96, 15, 120, 15, 30, 63, 120, 124, 7, 64, 127, 63, 0, 0, 0, 96, 15, 120, 15, 30, 63, 120, 124, 7, 64, 31, 60, 0, 0, 0, 96, 15, 120, 127, 31, 127, 127, 124, 127, 67, 31, 60, 0, 0, 0, 96, 15, 96, 127, 7, 127, 127, 112, 127, 79, 31, 60, 0, 0
-PRESENT_PIC	!byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 126, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 31, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 70, 127, 67, 127, 67, 127, 67, 127, 67, 127, 67, 99, 115, 127, 27, 118, 103, 115, 103, 115, 7, 112, 7, 112, 7, 112, 103, 3, 30, 24, 118, 103, 115, 127, 112, 127, 115, 127, 115, 127, 115, 127, 3, 30, 24, 118, 127, 112, 127, 112, 7, 0, 96, 115, 7, 112, 127, 3, 30, 24, 118, 7, 112, 103, 115, 127, 115, 127, 115, 127, 115, 115, 3, 30, 24, 118, 1, 112, 103, 115, 127, 112, 127, 112, 127, 112, 97, 3, 30, 24, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 126, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-OLD_PIC		!byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 124, 127, 124, 1, 127, 31, 127, 103, 127, 103, 127, 121, 63, 126, 0, 12, 96, 76, 1, 3, 24, 3, 102, 24, 102, 64, 25, 48, 102, 0, 12, 96, 76, 1, 3, 24, 3, 102, 24, 102, 64, 25, 48, 102, 0, 76, 103, 76, 1, 51, 24, 115, 103, 0, 102, 76, 25, 51, 102, 0, 76, 103, 76, 1, 115, 25, 115, 103, 0, 102, 76, 25, 51, 102, 0, 76, 103, 76, 1, 115, 25, 3, 102, 96, 103, 76, 25, 51, 102, 0, 76, 103, 76, 1, 115, 25, 3, 102, 0, 102, 76, 25, 51, 102, 0, 76, 103, 76, 1, 51, 24, 63, 102, 0, 102, 76, 25, 51, 102, 0, 12, 96, 76, 31, 3, 24, 3, 102, 24, 102, 64, 25, 48, 102, 15, 12, 96, 12, 24, 3, 24, 3, 102, 24, 102, 64, 25, 48, 6, 12, 124, 127, 124, 31, 127, 31, 127, 103, 127, 103, 127, 121, 63, 126, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 96, 24, 86, 101, 96, 48, 48, 13, 75, 97, 0, 0, 0, 0, 0, 96, 24, 86, 99, 96, 48, 112, 13, 71, 97, 0, 0, 0
 ; =============================================================================
 EFFECT4		; OLDSKOOL appearance
 !zone	
