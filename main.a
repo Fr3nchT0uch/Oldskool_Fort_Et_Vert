@@ -9,6 +9,7 @@
 ; GFX: GROUiK
 ;
 ; 05/2021
+; v0.09 - size opt (...)
 ; v0.08 - size opt (again)
 ; v0.07 - size opt (dynamically generated code + tables for some parts)
 ; v0.06 - new pattern for alt bars 
@@ -171,6 +172,7 @@ MAIN
 		; LDX #00
 		LDA #00
 -		STA TBUFFER,X			; set tables TBUFFER + TNewstar to 0
+		STA $00,X				; destroy ZP! (to init a lot of var)
 		INX
 		BNE -
 
@@ -282,23 +284,6 @@ MAIN
 
 		; init VARs
 		; y = 0
-            	STY Tick
-            	STY Tick+1 
-		STY bMark			
-		STY iTFrames 
-		STY L0
-            	STY L1
-            	STY L2
-            	STY L3
-            	STY L4
-		STY L5
-		STY IndexBar1
-		STY IndexDataPic
-		STY IndexLineColor
-		STY Indexcolor	
-		STY IndexSlice
-		STY countswap
-		STY indexswap
 		LDA #<(20280-2) 
 		STA IntL
 		LDA #>(20280-2)
@@ -326,7 +311,7 @@ MAIN
 Init_MB     	; init Mockingboard             
 !zone
 		; y = 0
-		STY OUT2
+		; STY OUT2
 		INY
 		STY OUT1
 		LDA #$C4
@@ -350,9 +335,7 @@ Init_MB     	; init Mockingboard
             	; ---------
             	LDA #PATTERNSIZE
             	STA count1Pat
-            	LDA #00
-            	STA indexPat
-            	TAX                 	; = 0 - init with pattern 0
+            	LDX #00			; init with pattern 0
             	JSR INIT_PATTERN
 ; -------------------------------------
 Init_INT    	; init interrupt
@@ -1294,7 +1277,6 @@ INIT_PATTERN
         		INY
         		STY iREGD
 		JMP .end
-
 ; =================================================================================================
 NBPATTERNS = 48             ; MAX 255
 PATTERNSIZE  = 64           ; MAX 128

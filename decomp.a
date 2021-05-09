@@ -8,6 +8,7 @@
 ;
 ; 05/2021
 ;
+; v0.05 - small opt (lz4)
 ; v0.04 - add "HOME" at launch
 ; v0.03 - add "jingle"
 ; v0.02 - add mini display while unpacking
@@ -58,9 +59,9 @@ START
 		; LDY #00
 		STY lenH
 		STY lenL
-		LDA #<(COMPDATA+16)    		; shunte LZ4 header
+		LDA #<(COMPDATA)    		
             	STA src2
-            	LDA #>(COMPDATA+16)
+            	LDA #>(COMPDATA)
             	STA src2+1
             	LDA #<DECOMP_ADD
             	STA dest            
@@ -76,7 +77,7 @@ START
                	lsr
                	lsr
                	lsr
-                  	beq .read_offset                     ; there is no literal
+                  	beq .read_offset                     
                   	cmp #$0f
                   	jsr .getLength
                   	
@@ -104,7 +105,7 @@ START
                   	; c=1
 		lda token
                   	and #$0f
-                  	adc #$03                            	; 3+1=4
+                  	adc #$03                            	
                   	cmp #$13
                   	jsr .getLength
 
@@ -164,4 +165,4 @@ DIS		!byte $DC,$AD,$AF,$A1
 ; =============================================================================
 COMPDATA
 
-!binary "main.b.lz4"
+!binary "main.b.lz4",,16			; skip LZ4 header
