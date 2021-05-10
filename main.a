@@ -3,12 +3,14 @@
 ; OLDSKOOL FORT ET VERT
 ; INTRO 8KB
 ; SHADOW PARTY 2021 VERSION
+; (c) [FRENCH TOUCH]
 ;
-; CODE: GROUiK / [FRENCH TOUCH]
+; CODE: GROUiK
 ; MUSIC: DUBMOOD + zOOm
 ; GFX: GROUiK
 ;
 ; 05/2021
+; v0.10 - size opt (REG3 = 0 removed from MUSIC.bin / player)
 ; v0.09 - size opt (...)
 ; v0.08 - size opt (again)
 ; v0.07 - size opt (dynamically generated code + tables for some parts)
@@ -53,9 +55,7 @@ dREG1		= $56	; +$57
 nREG2		= $58
 vREG2		= $59
 dREG2		= $5A	; +$5B
-nREG3		= $5C
-vREG3		= $5D
-dREG3		= $5E	; +$5F
+
 nREG4		= $60
 vREG4		= $61 
 dREG4		= $62	; +$63
@@ -93,7 +93,6 @@ indexPat    	= $89
 iREG0       	= $8A
 iREG1       	= $8B
 iREG2       	= $8C
-iREG3       	= $8D
 iREG4       	= $8E
 iREG5       	= $8F
 iREG6       	= $90
@@ -805,7 +804,7 @@ PLAYER_PYM	; alt L/R AY version
 		STA (OUT2),Y		; ORB1 (fct)
 		
         		DEC nREG2
-		BNE .r3
+		BNE .r4
         		LDY iREG2
         		LDA (dREG2),Y
 		STA nREG2
@@ -814,33 +813,6 @@ PLAYER_PYM	; alt L/R AY version
 		STA vREG2
 		INY
         		STY iREG2
-
-.r3		; REGISTER 3
-		LDY #00
-		LDA #$03				
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREG3			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-		
-        		DEC nREG3
-		BNE .r4
-        		LDY iREG3
-        		LDA (dREG3),Y
-		STA nREG3
-		INY
-		LDA (dREG3),Y
-		STA vREG3
-		INY
-        		STY iREG3
 
 .r4		; REGISTER 4
 		LDY #00
@@ -1155,18 +1127,6 @@ INIT_PATTERN
 		STA vREG2
 		INY
         		STY iREG2
-        		LDA D_REG3,X
-        		STA dREG3
-        		LDA D_REG3+NBPATTERNS,X
-        		STA dREG3+1
-        		LDY #00
-        		LDA (dREG3),Y
-		STA nREG3
-		INY
-		LDA (dREG3),Y
-		STA vREG3
-		INY
-        		STY iREG3
         		LDA D_REG4,X
         		STA dREG4
         		LDA D_REG4+NBPATTERNS,X
@@ -1278,23 +1238,23 @@ INIT_PATTERN
         		STY iREGD
 		JMP .end
 ; =================================================================================================
-NBPATTERNS = 48             ; MAX 255
 PATTERNSIZE  = 64           ; MAX 128
+NBPATTERNS = 48             ; MAX 255
 FRAMEMAX     = 2920
 
 D_REG0 = $6000
 D_REG1 = $6536
 D_REG2 = $65E4
-D_REG3 = $6C12
-D_REG4 = $6C74
-D_REG5 = $700E
-D_REG6 = $722A
-D_REG7 = $7374
-D_REG8 = $7656
-D_REG9 = $7940
-D_REGA = $7BD6
-D_REGB = $7DC8
-D_REGD = $7F4E
+D_REG4 = $6C12
+D_REG5 = $6FAC
+D_REG6 = $71C8
+D_REG7 = $7312
+D_REG8 = $75F4
+D_REG9 = $78DE
+D_REGA = $7B74
+D_REGB = $7D66
+D_REGD = $7EEC
+
 ; =================================================================================================
 ; pattern for generated code
 TPatternCode 	!byte $BD,<TBITS,>TBITS,$AE,$FF,$FF,$1D,<TDECALL,>TDECALL,$8D,$FF,$FF

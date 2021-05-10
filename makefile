@@ -18,7 +18,7 @@ EMULATOR = $(APPLEWIN)
 
 all: $(DISKNAME)
 
-$(DISKNAME): main.b.lz4 decomp.b
+$(DISKNAME): main.b.lz4 decomp.b data
 #	REMOVE OLD FILE (mandatory)
 	$(AC) -d $(DISKNAME) "OLDSKOOL"
 # 	COPY TO DSK
@@ -35,6 +35,7 @@ main.b.lz4 lbl_main.txt: main.a
 decomp.b: decomp.a lbl_main.txt main.b.lz4
 	$(ACME) decomp.b decomp.a
 
+data: MUSIC.bin HIRES.bin
 
 clean:
 	del *.b
