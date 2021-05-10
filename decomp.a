@@ -1,13 +1,17 @@
 ; ACME 0.96.4
 ; 
 ; OLDSKOOL FORT ET VERT
+; INTRO 8KB
 ; SHADOW PARTY 2021 VERSION
+; (c) [FRENCH TOUCH]
 ;
-; CODE: GROUiK / [FRENCH TOUCH]
-; MUSIC: DUBMOOD + ZOOM
+; CODE: GROUiK
+; LZ4 decompression routine: XXL and FOX (from Atari Scene)
+; [small modification: FT]
+;
 ;
 ; 05/2021
-;
+; v0.07 - cleaning
 ; v0.06 - remove jingle + decomp display for size :(
 ; v0.05 - small opt (lz4)
 ; v0.04 - add "HOME" at launch
@@ -26,12 +30,9 @@
 ; =============================================================================
 ; ZERO PAGE / decomp LZ4 (use usual free addresses in ZP)
 src1        	= $06   	; +$07
-src2        	= $08   	; +$09
-dest        	= $CE   	; +$CF
 lenL        	= $EB
 lenH        	= $EC
 token       	= $ED
-index		= $D7
 ; =============================================================================
 START
 !zone
@@ -39,16 +40,6 @@ START
 		;LDY #00
 		STY lenH
 		STY lenL
-		LDA #<(COMPDATA)    		
-            	STA src2
-            	LDA #>(COMPDATA)
-            	STA src2+1
-            	LDA #<DECOMP_ADD
-            	STA dest            
-            	LDA #>DECOMP_ADD
-            	STA dest+1
-		LDA #03
-		STA index
 
 .BP
           	jsr .GET_BYTE                  
@@ -69,7 +60,7 @@ START
                   	tax
                   	sec
                   	eor #$ff
-                  	adc dest
+                  	adc .moddest+1
                   	sta src1
                   	txa
                   	php							
@@ -80,7 +71,7 @@ START
                   	BNE .not_done			
 		JMP MAIN				; .unlz4_done 
 .not_done          	eor #$ff
-                  	adc dest+1
+                  	adc .moddest+2
                   	sta src1+1
                   	; c=1
 		lda token
@@ -89,9 +80,7 @@ START
                   	cmp #$13
                   	jsr .getLength
 
-.b1                 
-                    lda (src1),Y
-          
+.b1                 lda (src1),Y
                   	INC src1
                   	BNE .s1
                   	INC src1+1
@@ -99,10 +88,11 @@ START
                   	bne .b1
                   	jmp .BP                  
 
-.store             	sta (dest),Y
-                  	INC dest
+.store             	
+.moddest		sta DECOMP_ADD
+                  	INC .moddest+1
                   	BNE .s2
- 		INC dest+1      	
+ 		INC .moddest+2      	
 .s2                 dec lenL
                   	BNE +
                   	dec lenH
@@ -124,14 +114,12 @@ START
 .s4 	          rts
 
 		
-.GET_BYTE		LDA (src2),Y
-		INC src2		
-		BEQ .s5
-		RTS					
-.s5		INC src2+1			
-		RTS
-; -----------------------------------------------------------------------------
-DIS		!byte $DC,$AD,$AF,$A1
+.GET_BYTE		
+.modsrc		LDA COMPDATA
+		INC .modsrc+1		
+		BNE .s5
+		INC .modsrc+2
+.s5		RTS
 ; =============================================================================
 COMPDATA
 

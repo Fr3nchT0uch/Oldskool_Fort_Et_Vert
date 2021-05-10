@@ -35,7 +35,7 @@ main.b.lz4 lbl_main.txt: main.a
 decomp.b: decomp.a lbl_main.txt main.b.lz4
 	$(ACME) decomp.b decomp.a
 
-data: MUSIC.bin HIRES.bin
+data: MUSIC.bin HIRES.bin specialtxt.bin
 
 clean:
 	del *.b
