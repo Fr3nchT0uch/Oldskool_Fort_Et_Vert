@@ -1,9 +1,9 @@
 # OLDSKOOL FORT ET VERT
 
 An 8KB INTRO for Apple IIe with Mockingboard  
-(actually 8443 bytes!)
+(actually 8224 bytes!)
 
-v0.11 - 05/2021
+v0.12 - 05/2021
    
 **code + gfx:** GROUiK  
 **music:** DUBMOOD + z00m  

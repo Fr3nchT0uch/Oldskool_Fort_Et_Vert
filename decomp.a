@@ -8,6 +8,7 @@
 ;
 ; 05/2021
 ;
+; v0.06 - remove jingle + decomp display for size :(
 ; v0.05 - small opt (lz4)
 ; v0.04 - add "HOME" at launch
 ; v0.03 - add "jingle"
@@ -35,28 +36,7 @@ index		= $D7
 START
 !zone
 		JSR $FC58				; HOME (ROM)
-		; jingle
-		LDY #$D0
--		BIT $C030
-		LDA #$09
-		JSR $FCA8
-		DEY
-		BNE -
-		LDX #02
-		STX token
---		LDY #$D0
--		BIT $C030
-.MODJING		LDA #$07
-		JSR $FCA8
-		DEY
-		BNE -
-		LDA #$05
-		STA .MODJING+1
-		DEC token
-		BNE --
-		; -----------------
-		
-		; LDY #00
+		;LDY #00
 		STY lenH
 		STY lenL
 		LDA #<(COMPDATA)    		
@@ -122,17 +102,7 @@ START
 .store             	sta (dest),Y
                   	INC dest
                   	BNE .s2
- 		INC dest+1
-		; display
-		LDY index 
-		LDA DIS,Y
-	        	STA $400
-		DEC index
-		BPL +
-		LDY #03
-		STY index
-+		LDY #00
-		; -------      	
+ 		INC dest+1      	
 .s2                 dec lenL
                   	BNE +
                   	dec lenH

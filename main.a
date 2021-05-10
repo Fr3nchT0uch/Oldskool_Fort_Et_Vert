@@ -10,6 +10,7 @@
 ; GFX: GROUiK
 ;
 ; 05/2021
+; v0.12 - size opt (player PYM) + remove CPU detection (useless, fix was not working!)
 ; v0.11 - size opt (modify "modlines")
 ; v0.10 - size opt (REG3 = 0 removed from MUSIC.bin / player)
 ; v0.09 - size opt (...)
@@ -33,7 +34,6 @@ VERTBLANK   	= $C019 ;
 ; ZERO PAGE individual
 IntL        	= $03   	; L value for INT delay
 IntH        	= $04   	; H value for INT delay
-b65C02		= $05
 
 OUT1	  	= $10	; +$11
 OUT2        	= $12   	; +$13
@@ -48,64 +48,63 @@ saveX       	= $4D
 Tick        	= $4E   	; +$4F
 
 nREG0		= $50
-vREG0		= $51
-dREG0		= $52	; +$53
-nREG1		= $54
-vREG1		= $55
-dREG1		= $56	; +$57
-nREG2		= $58
-vREG2		= $59
-dREG2		= $5A	; +$5B
+nREG1		= $51
+nREG2		= $52
+nREG4		= $53
+nREG5		= $54
+nREG6		= $55
+nREG7		= $56
+nREG8		= $57
+nREG9		= $58
+nREGA		= $59
+nREGB		= $5A
+nREGD		= $5B
 
-nREG4		= $60
-vREG4		= $61 
-dREG4		= $62	; +$63
-nREG5		= $64
-vREG5		= $65 
-dREG5		= $66	; +$67
-nREG6		= $68
-vREG6		= $69
-dREG6		= $6A	; +$6B
-nREG7		= $6C
-vREG7		= $6D
-dREG7		= $6E	; +$6F
-nREG8		= $70
-vREG8		= $71
-dREG8		= $72	; +$73
-nREG9		= $74
-vREG9		= $75
-dREG9		= $76	; +$77
-nREGA		= $78
-vREGA		= $79 
-dREGA		= $7A	; +$7B
-nREGB		= $7C
-vREGB		= $7D 
-dREGB		= $7E	; +$7F
-nREGC		= $80
-vREGC		= $81 
-dREGC		= $82	; +$83
-nREGD		= $84
-vREGD		= $85
-dREGD		= $86	; +$87
+iREG0       	= $5C
+iREG1       	= $5D
+iREG2       	= $5E
+iREG4       	= $5F
+iREG5       	= $60
+iREG6       	= $61
+iREG7       	= $62
+iREG8       	= $63
+iREG9       	= $64
+iREGA       	= $65
+iREGB       	= $66
+iREGC       	= $67
+iREGD       	= $68
 
-count1Pat   	= $88
-indexPat    	= $89
+vREG0       	= $69
+vREG1       	= $6A
+vREG2       	= $6B
+vREG4       	= $6C
+vREG5       	= $6D
+vREG6       	= $6E
+vREG7       	= $6F
+vREG8       	= $70
+vREG9       	= $71
+vREGA       	= $72
+vREGB       	= $73
+vREGC       	= $74
+vREGD       	= $75
 
-iREG0       	= $8A
-iREG1       	= $8B
-iREG2       	= $8C
-iREG4       	= $8E
-iREG5       	= $8F
-iREG6       	= $90
-iREG7       	= $91
-iREG8       	= $92
-iREG9       	= $93
-iREGA       	= $94
-iREGB       	= $95
-iREGC       	= $96
-iREGD       	= $97
+dREG0       	= $76	; +$77
+dREG1       	= $78	; +$79
+dREG2       	= $7A	; +$7B
+dREG4       	= $7C 	; +$7D
+dREG5       	= $7E	; +$7F
+dREG6       	= $80	; +$81
+dREG7       	= $82	; +$83
+dREG8       	= $84	; +$85
+dREG9       	= $86	; +$87
+dREGA       	= $88	; +$89
+dREGB       	= $8A	; +$8B
+dREGC       	= $8C	; +$8D
+dREGD       	= $8E	; +$8F
 
-bMark		= $98
+count1Pat   	= $90
+indexPat    	= $91
+bMark		= $92
 
 ; ZP for effects parts
 temp2		= $FF 	; same 
@@ -177,7 +176,7 @@ MAIN
 		INX
 		BNE -
 
-		; GEN THB / THH tables (for PAGE2)
+		; GEN THB / THH Tables (for PAGE2)
 		; LDX #00		
 -		TXA 
 		AND #$C0
@@ -262,17 +261,6 @@ MAIN
 		BNE ---
 		LDA #$60			; RTS
 		STA SCROLLTEXTCODE+$B40
-
-		; GEN
-		
-		; CPU detection
-		; $80 = DOP/BRA
-            	!byte $80,$03   		; "BRA +3" if 65C02 or "DOP" if 6502
-            	JMP .n6502  		; if "BRA" skip JMP => 65C02 else DOP go to JMP (=> 6502)
-            	LDA #01			; 65C02 here
-            	!byte $2C			; skip 2 next bytes      		
-.n6502  		LDA #00
-	      	STA b65C02		; 0 if 6502 / 1 if 65C02 
 
 		; Set Lores1
 		LDY #00
@@ -710,10 +698,8 @@ MODPAGEG    	LDX #00                                                         	; 
             	; last VBL line
 		NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP
 		NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP : NOP
-		NOP
-		LDA b65C02	; 3
-		BNE +		; + 3 if 65C02 or + 2 if 6502
-+		
+		NOP : NOP : LDA $AC
+		
 		; first DISPLAY LINE
 		JSR ROUTINE_RUN		
 
@@ -722,7 +708,7 @@ MODPAGEG    	LDX #00                                                         	; 
 .end            	LDA saveA
 		LDY saveY
 		LDX saveX
-		RTI			; sortie INT 
+		RTI			; sortie INT
 ; =================================================================================================
 PLAYER_PYM	; alt L/R AY version				
 !zone
@@ -733,303 +719,41 @@ PLAYER_PYM	; alt L/R AY version
 		INX
 		STX OUT1
 
-.r0		; REGISTER 0
-		LDY #00
-		LDA #$00
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREG0			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
+		LDX #00
 		
-		DEC nREG0
-		BNE .r1
-        		LDY iREG0
-        		LDA (dREG0),Y
-		STA nREG0
-		INY
-		LDA (dREG0),Y
-		STA vREG0
-		INY
-        		STY iREG0
-        
-.r1		; REGISTER 1
-		LDY #00
-		LDA #$01				
-		STA (OUT1),Y		; reg#				
+.loopREG		LDY #00
+		LDA TableREG,X		; reg#	
+		STA (OUT1),Y					
 		LDA #$07			; Set fct "Set PSG Reg #"
 		STA (OUT2),Y		; ORB1 (fct)
 		LDA #$04			; Set fct "Inactive"
 		STA (OUT2),Y		; ORB1 (fct)
 
-		LDA vREG1			; reg value
+		LDA vREG0,X		; reg value
 		STA (OUT1),Y		; ORA1 (data)
 		LDA #$06			; Set fct "Write DATA"
 		STA (OUT2),Y		; ORB1 (fct)
 		LDA #$04			; Set fct "Inactive"
 		STA (OUT2),Y		; ORB1 (fct)
 		
-		DEC nREG1
-		BNE .r2
-        		LDY iREG1
-        		LDA (dREG1),Y
-		STA nREG1
-		INY
-		LDA (dREG1),Y
-		STA vREG1
-		INY
-        		STY iREG1
-		
-.r2		; REGISTER 2
-		LDY #00
-		LDA #$02				
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
+		DEC nREG0,X
+		BNE +
 
-		LDA vREG2			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-		
-        		DEC nREG2
-		BNE .r4
-        		LDY iREG2
-        		LDA (dREG2),Y
-		STA nREG2
+		LDA TableREG2,X
+		STA .mod1+1
+		STA .mod2+1
+        		LDY iREG0,X
+.mod1        	LDA (dREG0),Y
+		STA nREG0,X
 		INY
-		LDA (dREG2),Y
-		STA vREG2
+.mod2		LDA (dREG0),Y
+		STA vREG0,X
 		INY
-        		STY iREG2
+        		STY iREG0,X
 
-.r4		; REGISTER 4
-		LDY #00
-		LDA #04				
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREG4			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-		
-        		DEC nREG4
-		BNE .r5
-        		LDY iREG4
-        		LDA (dREG4),Y
-		STA nREG4
-		INY
-		LDA (dREG4),Y
-		STA vREG4
-		INY
-        		STY iREG4
-
-.r5		; REGISTER 5
-		LDY #00
-		LDA #$05				
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREG5			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-		
-        		DEC nREG5
-		BNE .r6
-        		LDY iREG5
-        		LDA (dREG5),Y
-		STA nREG5
-		INY
-		LDA (dREG5),Y
-		STA vREG5
-		INY
-        		STY iREG5
-
-.r6		; REGISTER 6
-		LDY #00
-		LDA #$06				
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREG5			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-		
-        		DEC nREG6
-		BNE .r7
-        		LDY iREG6
-        		LDA (dREG6),Y
-		STA nREG6
-		INY
-		LDA (dREG6),Y
-		STA vREG6
-		INY
-        		STY iREG6
-
-.r7		; REGISTER 7
-		LDY #00
-		LDA #$07				
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREG7			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-		
-        		DEC nREG7
-		BNE .r8
-        		LDY iREG7
-        		LDA (dREG7),Y
-		STA nREG7
-		INY
-		LDA (dREG7),Y
-		STA vREG7
-		INY
-        		STY iREG7
-
-.r8		; REGISTER 8
-		LDY #00
-		LDA #$08
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREG8			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-		
-        		DEC nREG8
-		BNE .r9
-        		LDY iREG8
-        		LDA (dREG8),Y
-		STA nREG8
-		INY
-		LDA (dREG8),Y
-		STA vREG8
-		INY
-        		STY iREG8
-
-.r9		; REGISTER 9
-		LDY #00
-		LDA #$09				
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREG9			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-			
-        		DEC nREG9
-		BNE .ra
-        		LDY iREG9
-        		LDA (dREG9),Y
-		STA nREG9
-		INY
-		LDA (dREG9),Y
-		STA vREG9
-		INY
-        		STY iREG9
-
-.ra		; REGISTER 10
-		LDY #00
-		LDA #$0A
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREGA			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-		
-        		DEC nREGA
-		BNE .rb
-        		LDY iREGA
-        		LDA (dREGA),Y
-		STA nREGA
-		INY
-		LDA (dREGA),Y
-		STA vREGA
-		INY
-        		STY iREGA
-
-.rb		; REGISTER 11
-		LDY #00
-		LDA #$0B				
-		STA (OUT1),Y		; reg#				
-		LDA #$07			; Set fct "Set PSG Reg #"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-
-		LDA vREGB			; reg value
-		STA (OUT1),Y		; ORA1 (data)
-		LDA #$06			; Set fct "Write DATA"
-		STA (OUT2),Y		; ORB1 (fct)
-		LDA #$04			; Set fct "Inactive"
-		STA (OUT2),Y		; ORB1 (fct)
-		
-        		DEC nREGB
-		BNE .rd
-        		LDY iREGB
-        		LDA (dREGB),Y
-		STA nREGB
-		INY
-		LDA (dREGB),Y
-		STA vREGB
-		INY
-        		STY iREGB
++		INX
+		CPX #11
+		BNE .loopREG
 
 .rd		; REGISTER 13	; skip if = $FF (warning 2 AY!)
 		LDA vREGD
@@ -1267,7 +991,10 @@ THFrames		!byte >256, >512, >768,>1152,>1280,>1408,>1536,>1664,>2048,>2304,>2560
 TDeplacement 	!byte $1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A,$1A
 TNewABS		!byte $73,$76,$7D,$84,$8B,$8B,$92,$94
 TNewORD		!byte $42,$46,$51,$52,$57,$5C,$62,$65
-TNewAdd		!byte $FE,$FE,$FE,$FF,$01,$02,$02,$03	
+TNewAdd		!byte $FE,$FE,$FE,$FF,$01,$02,$02,$03
+; player tables
+TableREG		!byte 00,01,02,04,05,06,07,08,09,10,11
+TableREG2		!byte <dREG0,<dREG1,<dREG2,<dREG4,<dREG5,<dREG6,<dREG7,<dREG8,<dREG9,<dREGA,<dREGB 
 ; =================================================================================================
 !align 255,0
 ROUTINE_RUN	; x = 0
@@ -1704,6 +1431,7 @@ TableByteStar	= $2500
 TBUFFER		= $2600
 TNewStar		= TBUFFER + 180
 
+dummy		= $2FFF
 SCROLLTEXTCODE 	= $3000
 ; =============================================================================
 EFFECT3		; change GR Colors	(alt)
