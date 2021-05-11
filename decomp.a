@@ -9,15 +9,8 @@
 ; LZ4 decompression routine: XXL and FOX (from Atari Scene)
 ; [small modification: FT]
 ;
-;
-; 05/2021
-; v0.07 - cleaning
-; v0.06 - remove jingle + decomp display for size :(
-; v0.05 - small opt (lz4)
-; v0.04 - add "HOME" at launch
-; v0.03 - add "jingle"
-; v0.02 - add mini display while unpacking
-; v0.01 - first commit
+; 05/2021 : v0.14 - RC1
+; size = 8187 bytes
 ; 
 !cpu 6502
 !convtab "a2txt.bin" ; 
@@ -29,15 +22,15 @@
 
 ; =============================================================================
 ; ZERO PAGE / decomp LZ4 (use usual free addresses in ZP)
-src1        	= $06   	; +$07
-lenL        	= $EB
-lenH        	= $EC
-token       	= $ED
+src1        	= $FA   	; +$FB
+lenL        	= $FC
+lenH        	= $FD
+token       	= $FE
 ; =============================================================================
 START
 !zone
-		JSR $FC58				; HOME (ROM)
-		;LDY #00
+		
+		LDY #00
 		STY lenH
 		STY lenL
 
