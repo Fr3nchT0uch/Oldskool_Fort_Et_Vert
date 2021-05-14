@@ -9,7 +9,7 @@
 ; MUSIC: DUBMOOD + zOOm
 ; GFX: GROUiK
 ;
-; 05/2021 : v0.14 - RC1
+; 05/2021 : v0.14 - released at Shadow Party 2021
 ; 
 !cpu 6502
 !convtab "a2txt.bin" ; 

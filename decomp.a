@@ -9,7 +9,7 @@
 ; LZ4 decompression routine: XXL and FOX (from Atari Scene)
 ; [small modification: FT]
 ;
-; 05/2021 : v0.14 - RC1
+; 05/2021 : v0.14 - released at Shadow Party 2021
 ; size = 8187 bytes
 ; 
 !cpu 6502
