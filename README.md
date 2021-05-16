@@ -18,8 +18,8 @@ https://twitter.com/_Fr3nch_T0uch_
 
 ## Requirements
 
-Apple IIe (PAL) / Mockingboard
--> 6502 required! 
+Apple IIe (PAL) / Mockingboard  
+-> 6502 required!   
 -> won't work properly on II+ and IIc
 
 
