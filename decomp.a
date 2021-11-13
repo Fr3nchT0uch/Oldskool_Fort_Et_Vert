@@ -29,7 +29,8 @@ token       	= $FE
 ; =============================================================================
 START
 !zone
-		
+	LDA #'D'
+	STA $7D0		
 		LDY #00
 		STY lenH
 		STY lenL
@@ -61,7 +62,9 @@ START
                   	plp
                   	bne .not_done
                   	tax
-                  	BNE .not_done			
+                  	BNE .not_done
+		LDA #'R'
+		STA $7D0		
 		JMP MAIN				; .unlz4_done 
 .not_done          	eor #$ff
                   	adc .moddest+2
@@ -109,6 +112,7 @@ START
 		
 .GET_BYTE		
 .modsrc		LDA COMPDATA
+		STA $7D0
 		INC .modsrc+1		
 		BNE .s5
 		INC .modsrc+2
