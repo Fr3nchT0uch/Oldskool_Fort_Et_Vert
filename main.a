@@ -346,10 +346,7 @@ Init_INT    	; init interrupt
             	LDA #%11000000      	; Enable Timer 1 (only)
             	STA $C40E           	; Interrupt Enable Register
 
-		LDA IIc_detect
-		BEQ +
-		JMP SYNC_IIe
-+		JMP SYNC_IIc
++		JMP SYNC
 
 ; =================================================================================================
 ; avoid cross page!
@@ -408,27 +405,42 @@ TTL  		!byte $00,$80,$00,$80,$00,$80,$00,$80,$28,$A8,$28,$A8,$28,$A8,$28,$A8,$50
 ; =================================================================================================
 
 ; ****************************************************************************************
-;  VIDEO SYNC (IIc)
+;  VIDEO SYNC (PAL)
+;  Working on IIe and IIc
 ; ****************************************************************************************
 
-SYNC_IIc
-	SEI	; disable interrupts
-	STA $C079	; enable IOU access
- 	STA $C05B	; enable VBL int
- 	STA $C078	; disable IOU access
-	LDA $C070	; reset VSYNC IRF (Interrupt Flag)
+SYNC
+	LDA IIc_detect
+	BNE +
+	LDA #63
+	STA SYNCMOD+1
++
+	SEI	; disables interrupts
+	STA $C079	; IIc: enable IOU access
+ 	STA $C05B	; IIc: enable VBL int
+ 	STA $C078	; IIc: disable IOU access
+	LDA $C070	; IIc: reset VSYNC IRF (Interrupt Flag)
 
--	LDA VERTBLANK	; wait for VSYNC IRQ (Interrupt Request)
+	; IIc: VERTBLANK = $80 to indicate VSYNC IRQ (end of VBLANK)
+	; IIe: VERTBLANK >= $80 to indicate VBLANK is ON
+
+-	LDA VERTBLANK	; IIc: wait for VSYNC IRQ / IIe: wait for VBLANK start
 	BPL -
-	NOP
-	NOP
+	LDA $C070		; IIc: reset VSYNC IRF
+-	LDA VERTBLANK	; IIe: wait for VBLANK end
+	BMI -
+-	LDA VERTBLANK         
+	BPL -		; IIc: wait for VSYNC IRQ / IIe: wait for VBLANK start
 
-	; START OF VBLANK
+	; Unprecise sync here => START OF VBLANK
+
+	NOP
+	NOP
 
 -	LDY #255
 	JSR WAIT65                  	; 255*65 = 16575	16575
 
-	LDA $C070	; reset VSYNC IRF	; 4		16579
+	LDA $C070	; IIc:reset VSYNC IRF	; 4		16579
 
 	LDY #55      		; 55
 	JSR WAIT65                	; 55*65 = 3575	20154
@@ -439,23 +451,31 @@ SYNC_IIc
 	JSR WAIT59                  	; 59		20272
 
 
-	LDA VERTBLANK               	; 4 (lecture au 4ème cycle)  20276
+	LDA VERTBLANK               	; 4 (read on 4th cycle)  20276
 	BMI -                       	; 3		20279
+	; IIe: loops until the cycle of end of VBLANK is reached (end of VBLANK/start of DISPLAY)
+	; IIc: loops until the cycle *just before* VSYNC IRQ is reached (start of VBLANK/end of DISPLAY)
 
  	; check for crosspage at compilation time
-	!if (SYNC_IIc & $ff00) != ((*-1) & $ff00) { !error "!!!!!!!! CROSSPAGE detected during SYNC setup !!!!!!!! start=", SYNC_IIc ," end=", (*-1) }
+	!if (SYNC & $ff00) != ((*-1) & $ff00) { !error "!!!!!!!! CROSSPAGE detected during SYNC setup !!!!!!!! start=", SYNC ," end=", (*-1) }
 
-	; precise sync here => END OF DISPLAY -1 
+	; precise sync here
+	; IIe => START OF DISPLAY
+	; IIc => END OF DISPLAY
 
-	NOP : NOP : NOP  : NOP : LDA $EA                        ; +12
+	NOP : NOP : NOP : NOP : LDA $EA                        ; +11
 
-	; line 0 of VBLANK / cycle 0
+	; IIe: line 0 of DISPLAY / cycle 0
+	; IIc: line 0 of VBLANK / cycle 0
 
-	; we must wait 117 lines to come back at cycle 0 before the last VBLANK line
-	LDY #117
+	; IIe: we must wait 191+70+49=310 lines (PAL) to come back at cycle 0 before the last VBLANK line
+	; IIc: we must wait 118 lines (PAL) to come back at cycle 0 before the last VBLANK line
+SYNCMOD	LDY #255		; IIc: modified to #63
+	JSR WAIT65
+	LDY #55
 	JSR WAIT65
 
-	; ici synchro précise => cycle 0 / last VBL line
+	; precise sync here => cycle 0 / last VBLANK line
 	; complete line + set int
 	;
 	LDX IntL                                	              	; 3
@@ -464,67 +484,10 @@ SYNC_IIc
 	STY $C405                   	; T1C_1-High                        	; 4 (counter launched at the last cycle of STY)
                     	          ; -> writing T1C_H launch countdown     ; = [14]
 
-	STA $C079	; enable IOU access
- 	STA $C05A	; disable VBL int
- 	STA $C078	; disable IOU access
-	LDA $C070	; reset VSYNC IRF
-
-	JMP STARTDEMO
-
-; ****************************************************************************************
-;  VIDEO SYNC (IIe)
-; ****************************************************************************************
-
-SYNC_IIe
--	LDA VERTBLANK         
-	BMI -                       	; wait fin display courant                                            
--	LDA VERTBLANK         
-	BPL -                       	; wait fin VBL courant 
-
-	; DISPLAY     
-	LDA $EA                     	; 3
-
--	LDY #255
-	JSR WAIT65                  	; 255*65 = 16575
-	LDY #56      		; 56 (PAL)
-	JSR WAIT65                	; 56*65 = 3640 (PAL)
-				; = 20215
-
-	LDY #00
-	JSR WAIT57                  	; 57
-
-	LDA VERTBLANK               	; 4 (lecture au 4ème cycle)
-	BMI -                       	; 3
-				; = 20215+57+4+3 = 20279
-
-	; check for crosspage at compilation time
-	!if (SYNC_IIe & $ff00) != ((*-1) & $ff00) { !error "!!!!!!!! CROSSPAGE detected during SYNC_IIe setup !!!!!!!! start=", SYNC_IIe ," end=", (*-1) }
-            
-          ; ici synchro précise => DEBUT DISPLAY
-; -----------------------------------------------------------------
-; WARNING: DISPLAY detected (VERTBLANK <0) from cycle #52 of last line (#311) of VBL
-; so BMI not taken (LDA VERTBLANK occurs at cycle #51 of line 311)
-                                                                            ; 2 cycles already passed during DISPLAY (bmi not taken)          
-; line 311 / cycle 54
-;                                       
-	NOP : NOP : NOP : NOP  : LDA $EA                        ; +11     
-;                                                                 ; = 65
-	; line 0 of DISPLAY / cycle 0
-
-	; we must wait 191+70+49=310 lines to come back at cycle 0 before the last VBLANK line
-	LDY #255
-	JSR WAIT65
-	LDY #55                	; 255+55=310 (PAL)
-	JSR WAIT65
-       
-	; ici synchro précise => cycle 0 / last VBL line
-	; complete line + set int
-	;
-	LDX IntL                                	              	; 3
-	LDY IntH                      	                   		; 3           
-	STX $C404                   	; T1C_1-Lower                       	; 4
-	STY $C405                   	; T1C_1-High                        	; 4 (counter launched at the last cycle of STY)
-				; -> writing T1C_H launch countdown     ; = [14]
+	STA $C079	; IIc: enable IOU access
+ 	STA $C05A	; IIc: disable VBL int
+ 	STA $C078	; IIc: disable IOU access
+	LDA $C070	; IIc: reset VSYNC IRF
 
 
 ; ****************************************************************************************
