@@ -8,8 +8,10 @@
 ; CODE: GROUiK
 ; MUSIC: DUBMOOD + zOOm
 ; GFX: GROUiK
+; IIC SYNC: FENARINARSA
 ;
 ; 05/2021 : v0.14 - released at Shadow Party 2021
+; 11/2021 : v0.15 - IIc compatibility
 ; 
 !cpu 6502
 !convtab "a2txt.bin" ; 
@@ -415,13 +417,13 @@ SYNC
 	LDA #63
 	STA SYNCMOD+1
 +
-	SEI	; disables interrupts
+	SEI	; disable interrupts
 	STA $C079	; IIc: enable IOU access
  	STA $C05B	; IIc: enable VBL int
  	STA $C078	; IIc: disable IOU access
 	LDA $C070	; IIc: reset VSYNC IRF (Interrupt Flag)
 
-	; IIc: VERTBLANK = $80 to indicate VSYNC IRQ (end of VBLANK)
+	; IIc: VERTBLANK = $80 to indicate VSYNC IRQ (start of VBLANK)
 	; IIe: VERTBLANK >= $80 to indicate VBLANK is ON
 
 -	LDA VERTBLANK	; IIc: wait for VSYNC IRQ / IIe: wait for VBLANK start
